@@ -1,5 +1,5 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message, BotCommand
+from pyrogram.types import Message, BotCommand, LinkPreviewOptions
 
 from utils.filters import is_admin
 
@@ -8,7 +8,7 @@ from utils.filters import is_admin
 async def start(_, msg: Message):
     await msg.reply_text(
         "**呀哈喽!**\n\n**项目地址:** [Github](https://github.com/z-mio/judgment-bot)",
-        disable_web_page_preview=True,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 
 
