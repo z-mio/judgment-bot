@@ -125,7 +125,6 @@ class EasyValidator(BaseValidator[CallbackQuery]):
         )
 
     async def verify_timeout(self):
-        aps.remove_job(f"{self.validator_id}|verify_timeout")
         until_date = datetime.now() + timedelta(seconds=60)
         await self.chat.ban_member(self.user_id, until_date)
         await self.verify_msg.delete()
