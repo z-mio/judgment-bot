@@ -116,6 +116,7 @@ class EasyValidator(BaseValidator[CallbackQuery]):
         )
 
     async def verify_fail(self, content: CallbackQuery):
+        aps.remove_job(f"{self.validator_id}|refresh_verify_msg")
         until_date = datetime.now() + timedelta(seconds=60)
         await self.chat.ban_member(self.user_id, until_date)
         await content.answer("验证失败")
