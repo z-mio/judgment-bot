@@ -1,6 +1,6 @@
 # Telegramの风纪委员
 
-简单实用的验证Bot
+简单实用的 Telegram 入群验证 Bot
 
 ## 环境变量
 

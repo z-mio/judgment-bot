@@ -3,7 +3,7 @@ import sys
 from pyrogram import Client
 from config.config import cfg
 from log import logger
-from services.redis_client import check_redis_connection
+from services.redis_client import check_redis_connection, rc
 from utils.aps import aps
 from utils.optimized_event_loop import setup_optimized_event_loop
 
@@ -42,7 +42,7 @@ class Bot(Client):
         await super().start()
 
     async def stop(self, *args):
-        await rc.close()
+        await rc.aclose()
         await super().stop()
 
 
