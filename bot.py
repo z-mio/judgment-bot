@@ -3,6 +3,8 @@ import sys
 from pyrogram import Client
 from config.config import cfg
 from log import logger
+from services.redis_client import check_redis_connection
+from utils.aps import aps
 from utils.optimized_event_loop import setup_optimized_event_loop
 
 logger.remove()
@@ -12,6 +14,12 @@ if cfg.debug:
 else:
     logger.add("logs/bot.log", rotation="5 MB", level="INFO")
     logger.add(sys.stderr, level="INFO")
+
+
+async def init():
+    aps.start()
+    if not await check_redis_connection():
+        exit(1)
 
 
 class Bot(Client):
@@ -29,9 +37,12 @@ class Bot(Client):
 
     async def start(self, **kwargs):
         logger.info("Bot开始运行...")
+        logger.debug("DEBUG 已开启")
+        await init()
         await super().start()
 
     async def stop(self, *args):
+        await rc.close()
         await super().stop()
 
 

@@ -14,7 +14,7 @@ class BotConfig:
         self.api_id = getenv("API_ID")
         self.api_hash = getenv("API_HASH")
         self.proxy: None | BotConfig._Proxy = self._Proxy(getenv("PROXY", None))
-        self.debug = getenv("BOT_DEBUG", "False").lower() == "true"
+        self.debug = getenv("DEBUG", "False").lower() == "true"
 
     class _Proxy:
         def __init__(self, url: str):
