@@ -7,7 +7,8 @@ from utils.filters import is_admin
 @Client.on_message(filters.command(["start", "help"]))
 async def start(_, msg: Message):
     await msg.reply_text(
-        "**呀哈喽!**\n\n项目地址: [Github](https://github.com/z-mio/judgment-bot)"
+        "**呀哈喽!**\n\n**项目地址:** [Github](https://github.com/z-mio/judgment-bot)",
+        disable_web_page_preview=True,
     )
 
 
