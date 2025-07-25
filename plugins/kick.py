@@ -5,12 +5,9 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import BadRequest
 from pyrogram.types import Message
 
-from utils.filters import is_admin
-
 
 @Client.on_message(filters.command("kick") & filters.group & filters.admin)
 async def kick(cli: Client, msg: Message):
-    print(msg.chat.is_admin)
     user = await msg.chat.get_member(msg.from_user.id)
     if user.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
         m = await msg.reply_text("🤡")
