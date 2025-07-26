@@ -33,12 +33,17 @@ class EasyValidator(BaseValidator[CallbackQuery]):
         self.verify_msg_id: int | None = None
         self.verify_msg: Message | None = None
 
-    async def init(self, cli: Client):
+    async def init(self, cli: Client) -> bool:
         self.cli = cli
         self.chat = await cli.get_chat(self.chat_id)
-        self.chat_member = await cli.get_chat_member(self.chat_id, self.user_id)
+        try:
+            self.chat_member = await cli.get_chat_member(self.chat_id, self.user_id)
+        except Exception as e:
+            logger.error(f"获取群成员信息失败: {e}")
+            return False
         if self.verify_msg_id and not self.verify_msg:
             self.verify_msg = await cli.get_messages(self.chat_id, self.verify_msg_id)
+        return True
 
     def dumps(self):
         return json.dumps(

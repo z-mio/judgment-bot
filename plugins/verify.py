@@ -13,7 +13,8 @@ from services.redis_client import rc
 @Client.on_chat_member_updated(new_members & filters.admin)
 async def verify(cli: Client, msg: ChatMemberUpdated):
     v = EasyValidator(msg.chat.id, msg.from_user.id)
-    await v.init(cli)
+    if not await v.init(cli):
+        return
     await v.start()
     await rc.set(v.validator_id, v.dumps())
 
@@ -32,6 +33,8 @@ async def verify_callback(cli: Client, cq: CallbackQuery):
     ]:
         return await cq.answer("权限不足", show_alert=True)
 
-    await v.init(cli)
+    if not await v.init(cli):
+        return None
+
     await v.progress(cq)
     return await rc.delete(data.validator_id)
