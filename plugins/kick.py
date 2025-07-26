@@ -42,17 +42,8 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery):
 
 
 async def member_kick_button(_, msg: Message):
-    user_id = msg.from_user.id
-
-    if not await can_user_kick(user_id):
-        remaining = await get_kick_cooldown_remaining(user_id)
-        minutes = remaining // 60
-        seconds = remaining % 60
-        await msg.reply(f"冷却中... | 等待: `{minutes}`分`{seconds}`秒")
-        return
-
     await msg.reply(
-        f"**确定要击落 {get_md_user_url(msg.reply_to_message.from_user)} 吗?**",
+        f"**确定要击落 {get_md_user_url(msg.reply_to_message.from_user)} 吗?**\n\n**本功能仅可用于击落广告哥, 切勿意气用事**\n否则将进行2倍返还: 被ban的人被封了1小时, 你会被反噬封2小时",
         reply_markup=Ikm(
             [
                 [
