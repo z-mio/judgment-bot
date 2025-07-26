@@ -1,6 +1,7 @@
 # Telegramの风纪委员
 
-简单实用的 Telegram 入群验证 Bot
+简单实用的 Telegram 入群验证 Bot  
+普通成员可以每小时使用一次 `/kick` 功能, 以防管理不在导致广告刷屏
 
 ## 环境变量
 
