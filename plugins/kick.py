@@ -59,11 +59,11 @@ async def member_kick_button(_, msg: Message):
 async def member_kick(cli: Client, msg: Message):
     rm = msg.reply_to_message  # 用户发送的指令消息
     ad_msg = rm.reply_to_message  # 广告消息
-    if await member_is_admin(cli, msg.chat.id, ad_msg.from_user.id):
+    if await member_is_admin(cli, ad_msg.chat.id, ad_msg.from_user.id):
         return await msg.edit("造反吗? 有意思")
 
     try:
-        await cli.ban_chat_member(rm.chat.id, rm.from_user.id)
+        await cli.ban_chat_member(ad_msg.chat.id, ad_msg.from_user.id)
     except BadRequest as e:
         await msg.edit("击落失败")
         logger.error(e)
