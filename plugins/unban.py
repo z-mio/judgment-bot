@@ -22,4 +22,3 @@ async def unban(cli: Client, msg: Message):
         return await msg.reply(f"放出 `{unban_user}` 失败")
     else:
         return await msg.reply(f"已放出 `{unban_user}`")
-    
