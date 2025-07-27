@@ -12,7 +12,10 @@ async def ban_channel(cli: Client, msg: Message):
 
     channel_msg = msg.reply_to_message
     if not channel_msg:
-        m = await msg.reply("请回复一条消息")
+        m = await msg.reply("请回复一条频道消息")
+        return await delete_messages(cli, msg.chat.id, [msg.id, m.id])
+    if not channel_msg.sender_chat:
+        m = await msg.reply("请回复频道消息")
         return await delete_messages(cli, msg.chat.id, [msg.id, m.id])
 
     try:
