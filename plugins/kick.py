@@ -11,7 +11,7 @@ from pyrogram.types import (
 )
 
 from log import logger
-from services.redis_client import rc
+from services.kick_cooldown_manager import kick_cooldown
 from utils.util import get_md_user_url, member_is_admin, delete_messages
 
 
@@ -38,9 +38,9 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery):
 
     action = a.split("=")[1]
     if action == "confirm":
-        await set_kick_cooldown(cq.message.reply_to_message.from_user.id)
         await member_kick(cli, cq.message)
     elif action == "cancel":
+        await kick_cooldown.clear_cooldown(action_user_id)
         await cq.message.edit("已取消操作")
 
 
@@ -50,6 +50,13 @@ async def member_kick_button(_, msg: Message):
     if (jd := joined_days(member.joined_date)) < least_joined_days:
         return await msg.reply(
             f"此功能需要入群天数大于 `{least_joined_days}` 天\n已入群天数: `{jd}` 天"
+        )
+
+    if await kick_cooldown.can_user_kick(msg.from_user.id):
+        await kick_cooldown.set_cooldown(msg.from_user.id)
+    else:
+        return await msg.reply(
+            f"冷却中... | 剩余: {await kick_cooldown.get_remaining_time_formatted(msg.from_user.id)}"
         )
 
     return await msg.reply(
@@ -76,7 +83,9 @@ async def member_kick(cli: Client, msg: Message):
     rm = msg.reply_to_message  # 用户发送的指令消息
     ad_msg = rm.reply_to_message  # 广告消息
     if await member_is_admin(cli, ad_msg.chat.id, ad_msg.from_user.id):
-        return await msg.edit("造反吗? 有意思")
+        await msg.edit("造反吗? 有意思")
+        await kick_cooldown.clear_cooldown(rm.from_user.id)
+        return
 
     try:
         await cli.ban_chat_member(ad_msg.chat.id, ad_msg.from_user.id)
@@ -84,6 +93,7 @@ async def member_kick(cli: Client, msg: Message):
         logger.exception(e)
         logger.error("击落失败, 以上为错误信息")
         await msg.edit("击落失败")
+        await kick_cooldown.clear_cooldown(rm.from_user.id)
     else:
         await ad_msg.delete()
         await msg.edit(
@@ -115,23 +125,3 @@ def joined_days(joined_date: datetime):
     now = datetime.now()
     delta = now - joined_date
     return delta.days
-
-
-async def can_user_kick(user_id: int) -> bool:
-    """检查用户是否可以kick"""
-    key = f"kick_cooldown:{user_id}"
-    exists = await rc.exists(key)
-    return not exists
-
-
-async def set_kick_cooldown(user_id: int):
-    """设置用户kick冷却时间（1小时）"""
-    key = f"kick_cooldown:{user_id}"
-    await rc.set(key, "1", ex=3600)
-
-
-async def get_kick_cooldown_remaining(user_id: int) -> int:
-    """获取剩余冷却时间（秒）"""
-    key = f"kick_cooldown:{user_id}"
-    ttl = await rc.ttl(key)
-    return max(0, ttl) if ttl > 0 else 0
