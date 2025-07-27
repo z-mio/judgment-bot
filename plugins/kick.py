@@ -1,7 +1,6 @@
-import asyncio
+from datetime import datetime
 
 from pyrogram import Client, filters
-from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import BadRequest
 from pyrogram.types import (
     Message,
@@ -13,7 +12,7 @@ from pyrogram.types import (
 
 from log import logger
 from services.redis_client import rc
-from utils.util import get_md_user_url
+from utils.util import get_md_user_url, member_is_admin, delete_messages
 
 
 @Client.on_message(filters.command("kick") & filters.group & filters.admin)
@@ -21,6 +20,8 @@ async def kick(cli: Client, msg: Message):
     if not msg.reply_to_message:
         m = await msg.reply("请回复一条消息")
         await delete_messages(cli, msg.chat.id, [msg.id, m.id])
+    elif msg.reply_to_message.sender_chat:
+        await msg.reply("封禁频道请使用 /bc")
     else:
         if await member_is_admin(cli, msg.chat.id, msg.from_user.id):
             await admin_kick(cli, msg)
@@ -30,10 +31,12 @@ async def kick(cli: Client, msg: Message):
 
 @Client.on_callback_query(filters.regex(r"^member_kick"))
 async def member_kick_callback(cli: Client, cq: CallbackQuery):
-    if not cq.data.startswith("member_kick="):
-        return
+    a, u = cq.data.split(";")
+    action_user_id = int(u.split("=")[1])
+    if cq.from_user.id != action_user_id:
+        return await cq.answer("这不是你的操作", show_alert=True)
 
-    action = cq.data.split("=")[1]
+    action = a.split("=")[1]
     if action == "confirm":
         await set_kick_cooldown(cq.message.reply_to_message.from_user.id)
         await member_kick(cli, cq.message)
@@ -42,13 +45,26 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery):
 
 
 async def member_kick_button(_, msg: Message):
-    await msg.reply(
+    member = await msg.chat.get_member(msg.from_user.id)
+    least_joined_days = 30
+    if (jd := joined_days(member.joined_date)) < least_joined_days:
+        return await msg.reply(
+            f"此功能需要入群天数大于 `{least_joined_days}` 天\n已入群天数: `{jd}` 天"
+        )
+
+    return await msg.reply(
         f"**确定要击落 {get_md_user_url(msg.reply_to_message.from_user)} 吗?**\n\n**本功能仅可用于击落广告哥, 切勿意气用事**\n否则将进行2倍返还: 被ban的人被封了1小时, 你会被反噬封2小时",
         reply_markup=Ikm(
             [
                 [
-                    Ikb("广告哥,击落!", callback_data="member_kick=confirm"),
-                    Ikb("手滑了", callback_data="member_kick=cancel"),
+                    Ikb(
+                        "广告哥,击落!",
+                        callback_data=f"member_kick=confirm;user={msg.from_user.id}",
+                    ),
+                    Ikb(
+                        "手滑了",
+                        callback_data=f"member_kick=cancel;user={msg.from_user.id}",
+                    ),
                 ]
             ]
         ),
@@ -65,8 +81,9 @@ async def member_kick(cli: Client, msg: Message):
     try:
         await cli.ban_chat_member(ad_msg.chat.id, ad_msg.from_user.id)
     except BadRequest as e:
+        logger.exception(e)
+        logger.error("击落失败, 以上为错误信息")
         await msg.edit("击落失败")
-        logger.error(e)
     else:
         await ad_msg.delete()
         await msg.edit(
@@ -93,23 +110,11 @@ async def admin_kick(cli: Client, msg: Message):
         await delete_messages(cli, msg.chat.id, [msg.id, m.id])
 
 
-async def member_is_admin(cli: Client, cid: int, uid: int) -> bool:
-    try:
-        member = await cli.get_chat_member(cid, uid)
-    except Exception:
-        return False
-
-    if member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
-        return True
-    return False
-
-
-async def delete_messages(cli: Client, chat_id: int, message_ids: list[int]):
-    try:
-        await asyncio.sleep(5)
-        await cli.delete_messages(chat_id, message_ids)
-    except Exception:
-        ...
+def joined_days(joined_date: datetime):
+    """获取入群天数"""
+    now = datetime.now()
+    delta = now - joined_date
+    return delta.days
 
 
 async def can_user_kick(user_id: int) -> bool:

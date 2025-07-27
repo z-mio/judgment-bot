@@ -15,7 +15,9 @@ async def start(_, msg: Message):
 @Client.on_message(filters.command("menu") & is_admin)
 async def set_menu(cli: Client, msg: Message):
     commands = {
-        "kick": "封禁并踢出群聊",
+        "kick": "封禁用户并踢出群聊",
+        "bc": "封禁频道马甲",
+        "unban": "解封用户/频道",
         "start": "开始",
         "help": "帮助",
     }
