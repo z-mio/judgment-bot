@@ -95,7 +95,9 @@ async def member_kick(cli: Client, msg: Message):
         await msg.edit("击落失败")
         await kick_cooldown.clear_cooldown(rm.from_user.id)
     else:
-        await ad_msg.delete()
+        await delete_member_messages(
+            cli, ad_msg.chat.id, ad_msg.from_user.id, ad_msg.id
+        )
         await msg.edit(
             f"{get_md_user_url(rm.from_user)} 已击落 {get_md_user_url(ad_msg.from_user)}",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
@@ -104,7 +106,6 @@ async def member_kick(cli: Client, msg: Message):
 
 async def admin_kick(cli: Client, msg: Message):
     rm = msg.reply_to_message
-
     if await member_is_admin(cli, msg.chat.id, rm.from_user.id):
         m = await msg.reply_text("禁止窝里斗")
         return await delete_messages(cli, msg.chat.id, [msg.id, m.id])
@@ -115,9 +116,29 @@ async def admin_kick(cli: Client, msg: Message):
         await msg.reply_text("击落失败")
         logger.error(e)
     else:
-        await rm.delete()
+        await delete_member_messages(cli, rm.chat.id, rm.from_user.id, rm.id)
         m = await msg.reply_text("已击落")
         await delete_messages(cli, msg.chat.id, [msg.id, m.id])
+
+
+async def delete_member_messages(
+    cli: Client, chat_id: int, user_id: int, msg_id: int, limit: int = 100
+):
+    """
+    删除最近 100 条消息
+    """
+    msgs = await cli.get_messages(
+        chat_id,
+        message_ids=list(
+            range(max(msg_id - (limit // 2), 1), msg_id + (limit // 2) + 1)
+        ),
+    )
+    for m in msgs:
+        if m.empty:
+            continue
+        if m.from_user:
+            if m.from_user.id == user_id:
+                await m.delete()
 
 
 def joined_days(joined_date: datetime):
