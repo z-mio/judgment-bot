@@ -112,7 +112,7 @@ class EasyValidator(BaseValidator):
 
         await self.chat.ban_member(self.user_id)
         await content.answer("已永久踢出")
-        await self.end_text("管理手动击落")
+        await self.end_text(f"已被管理 {get_md_chat_link(content.from_user)} 手动击落")
         logger.debug(
             f"验证失败(管理手动踢出): 已在 {self.chat.full_name} 中踢出: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
@@ -132,7 +132,7 @@ class EasyValidator(BaseValidator):
             ),
         )
         await content.answer("已通过")
-        await self.end_text("管理手动通过")
+        await self.end_text(f"已被管理 {get_md_chat_link(content.from_user)} 手动通过")
         logger.debug(
             f"验证通过: 已在 {self.chat.full_name} 中通过验证: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
