@@ -1,10 +1,10 @@
 import abc
 import re
-from typing import TypeVar, Generic
+
+from pyrogram import Client
+from pyrogram.types import Message, CallbackQuery
 
 from utils.util import get_hash
-
-T = TypeVar("T")
 
 
 class CQData:
@@ -32,7 +32,28 @@ class CQData:
         return self.unparse()
 
 
-class BaseValidator(abc.ABC, Generic[T]):
+class StartData:
+    sep = "="
+
+    def __init__(self, validator_id: str, rid: str, operate: str, value: str):
+        self.validator_id = validator_id
+        self.rid = rid
+        self.operate = operate
+        self.value = value
+
+    @classmethod
+    def parse(cls, data: str):
+        provider, rid, operate, value = data.split(cls.sep, 3)
+        return cls(provider, rid, operate, value)
+
+    def unparse(self):
+        return f"{self.validator_id}{self.sep}{self.rid}{self.sep}{self.operate}{self.sep}{self.value}"
+
+    def __repr__(self):
+        return self.unparse()
+
+
+class BaseValidator(abc.ABC):
     validator_name: str = ""
 
     def __init__(self, chat_id: int, user_id: int):
@@ -43,26 +64,14 @@ class BaseValidator(abc.ABC, Generic[T]):
     async def init(self, *args, **kwargs): ...
 
     @abc.abstractmethod
-    async def start(self): ...
+    async def start(self, cli: Client): ...
 
     @abc.abstractmethod
-    async def progress(self, content: T): ...
-
-    @abc.abstractmethod
-    async def verify_pass(self, content: T): ...
-
-    @abc.abstractmethod
-    async def admin_verify_fail(self, content: T): ...
-
-    @abc.abstractmethod
-    async def verify_fail(self, content: T): ...
-
-    @abc.abstractmethod
-    async def verify_timeout(self): ...
+    async def progress(self, cli: Client, content: Message | CallbackQuery): ...
 
     @property
     def validator_id(self) -> str:
-        return get_hash(f"{self.validator_name}_{self.chat_id}_{self.user_id}")
+        return get_hash(f"{self.validator_name}_{self.chat_id}_{self.user_id}")[:8]
 
     @abc.abstractmethod
     def dumps(self): ...

@@ -12,7 +12,7 @@ COMMANDS = {
 }
 
 
-@Client.on_message(filters.command(["start", "help"]))
+@Client.on_message(filters.command(["start", "help"]), group=1)
 async def start(_, msg: Message):
     await msg.reply_text(
         f"**呀哈喽!**\n\n"

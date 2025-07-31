@@ -1,11 +1,12 @@
 from pyrogram.enums import ChatMemberStatus
 
-from utils.filters import new_members
-from validator import CQData, EasyValidator
+from utils.filters import new_members, start_filter
+from validator import CQData, EasyValidator, StartData
 from pyrogram import Client, filters
 from pyrogram.types import (
     CallbackQuery,
     ChatMemberUpdated,
+    Message,
 )
 from services.redis_client import rc
 
@@ -15,14 +16,17 @@ async def verify(cli: Client, msg: ChatMemberUpdated):
     v = EasyValidator(msg.chat.id, msg.from_user.id)
     if not await v.init(cli):
         return
-    await v.start()
+    await v.start(cli)
     await rc.set(v.validator_id, v.dumps())
 
 
 @Client.on_callback_query(filters.regex(r"^@"))
 async def verify_callback(cli: Client, cq: CallbackQuery):
     data = CQData.parse(cq.data)
-    v = EasyValidator.loads(await rc.get(data.validator_id))
+    try:
+        v = EasyValidator.loads(await rc.get(data.validator_id))
+    except Exception:
+        return await cq.answer("验证已过期", show_alert=True)
 
     click_user = await cq.message.chat.get_member(cq.from_user.id)
     if data.operate == "verify" and click_user.user.id != v.user_id:
@@ -36,5 +40,27 @@ async def verify_callback(cli: Client, cq: CallbackQuery):
     if not await v.init(cli):
         return None
 
-    await v.progress(cq)
+    await v.progress(cli, cq)
     return await rc.delete(data.validator_id)
+
+
+@Client.on_message(start_filter(".*"))
+async def start_handler(cli: Client, msg: Message):
+    text = msg.text.replace("/start ", "")
+    data = StartData.parse(text)
+    try:
+        v = EasyValidator.loads(await rc.get(data.validator_id))
+    except Exception:
+        return await msg.reply("验证已过期")
+
+    click_user_id = msg.from_user.id
+    if data.operate == "verify" and click_user_id != v.user_id:
+        return await msg.reply("这不是你的验证")
+
+    if not await v.init(cli):
+        return None
+
+    await v.progress(cli, msg)
+    await rc.delete(data.validator_id)
+    msg.stop_propagation()
+    return None

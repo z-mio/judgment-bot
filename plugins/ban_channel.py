@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 
 from log import logger
-from utils.util import delete_messages, get_md_user_url, member_is_admin
+from utils.util import delete_messages, get_md_chat_link, member_is_admin
 
 
 @Client.on_message(filters.command("bc") & filters.group & filters.admin)
@@ -25,4 +25,4 @@ async def ban_channel(cli: Client, msg: Message):
         logger.error("封禁频道失败, 以上为错误信息")
         return await msg.reply("封禁频道失败")
     else:
-        await msg.reply(f"已封禁 {get_md_user_url(channel_msg.sender_chat)}")
+        await msg.reply(f"已封禁 {get_md_chat_link(channel_msg.sender_chat)}")

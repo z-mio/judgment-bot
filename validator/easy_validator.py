@@ -17,11 +17,12 @@ from pyrogram.types import (
 
 from log import logger
 from utils.aps import aps
-from validator.base import BaseValidator, CQData
+from utils.util import build_start_link, get_chat_link, get_md_chat_link
+from validator.base import BaseValidator, CQData, StartData
 
 
 @dataclass(init=False)
-class EasyValidator(BaseValidator[CallbackQuery]):
+class EasyValidator(BaseValidator):
     validator_name: str = "easy_validator"
 
     def __init__(self, chat_id: int, user_id: int):
@@ -61,7 +62,7 @@ class EasyValidator(BaseValidator[CallbackQuery]):
         v.verify_msg_id = obj["verify_msg_id"]
         return v
 
-    async def start(self):
+    async def start(self, cli: Client):
         await self.chat.restrict_member(self.user_id, ChatPermissions())
         random_number = random.randint(5, 10)
         text = (
@@ -69,32 +70,48 @@ class EasyValidator(BaseValidator[CallbackQuery]):
             f"在请 [{self.chat_member.user.full_name}](tg://user?id={self.user_id})"
         )
         verify_msg = await self.cli.send_message(
-            chat_id=self.chat_id, text=text, reply_markup=self.btn("one")
+            chat_id=self.chat_id, text=text, reply_markup=self.btn(cli, "one")
         )
         self.verify_msg = verify_msg
         self.verify_msg_id = verify_msg.id
         aps.add_job(
             id=f"{self.validator_id}|refresh_verify_msg",
             func=self.refresh_verify_msg,
+            args=(cli,),
             trigger="date",
             run_date=datetime.now() + timedelta(seconds=random_number),
         )
 
-    async def progress(self, content: CallbackQuery):
-        data = CQData.parse(content.data)
-        if data.operate == "admin":
-            if data.value == "pass":
-                await self.verify_pass(content)
-            elif data.value == "fail":
-                await self.admin_verify_fail(content)
-        elif data.operate == "verify":
+    async def progress(self, _, content: CallbackQuery | Message):
+        if isinstance(content, CallbackQuery):
+            data = CQData.parse(content.data)
+            if data.operate == "admin":
+                if data.value == "pass":
+                    await self.admin_verify_pass(content)
+                elif data.value == "fail":
+                    await self.admin_verify_fail(content)
+        if isinstance(content, Message):
+            data = StartData.parse(content.text.replace("/start ", ""))
             if data.value == "pass":
                 await self.verify_pass(content)
             elif data.value == "fail":
                 await self.verify_fail(content)
 
-    async def verify_pass(self, content: CallbackQuery):
-        aps.remove_job(f"{self.validator_id}|verify_timeout")
+    async def admin_verify_fail(self, content: CallbackQuery):
+        if aps.get_job(f"{self.validator_id}|verify_timeout"):
+            aps.remove_job(f"{self.validator_id}|verify_timeout")
+
+        await self.chat.ban_member(self.user_id)
+        await content.answer("已永久踢出")
+        await self.verify_msg.delete()
+        logger.debug(
+            f"验证失败(管理手动踢出): 已在 {self.chat.full_name} 中踢出: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
+        )
+
+    async def admin_verify_pass(self, content: CallbackQuery):
+        if aps.get_job(f"{self.validator_id}|verify_timeout"):
+            aps.remove_job(f"{self.validator_id}|verify_timeout")
+
         await self.chat.restrict_member(
             self.user_id,
             ChatPermissions(
@@ -111,20 +128,40 @@ class EasyValidator(BaseValidator[CallbackQuery]):
             f"验证通过: 已在 {self.chat.full_name} 中通过验证: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
-    async def admin_verify_fail(self, content: CallbackQuery):
-        aps.remove_job(f"{self.validator_id}|verify_timeout")
-        await self.chat.ban_member(self.user_id)
-        await content.answer("已永久踢出")
+    async def verify_pass(self, content: Message):
+        if aps.get_job(f"{self.validator_id}|verify_timeout"):
+            aps.remove_job(f"{self.validator_id}|verify_timeout")
+
+        await self.chat.restrict_member(
+            self.user_id,
+            ChatPermissions(
+                can_send_messages=True,
+                can_send_media_messages=True,
+                can_send_other_messages=True,
+                can_invite_users=True,
+                can_add_web_page_previews=True,
+            ),
+        )
+        await content.reply(
+            f"**{get_md_chat_link(self.verify_msg.chat)} 验证通过**",
+            reply_markup=Ikm(
+                [[Ikb("返回群组", url=get_chat_link(self.verify_msg.chat))]]
+            ),
+        )
         await self.verify_msg.delete()
         logger.debug(
-            f"验证失败(管理手动踢出): 已在 {self.chat.full_name} 中踢出: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
+            f"验证通过: 已在 {self.chat.full_name} 中通过验证: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
-    async def verify_fail(self, content: CallbackQuery):
-        aps.remove_job(f"{self.validator_id}|refresh_verify_msg")
+    async def verify_fail(self, content: Message):
+        if aps.get_job(f"{self.validator_id}|refresh_verify_msg"):
+            aps.remove_job(f"{self.validator_id}|refresh_verify_msg")
+
         until_date = datetime.now() + timedelta(seconds=60)
         await self.chat.ban_member(self.user_id, until_date)
-        await content.answer("验证失败")
+        await content.reply(
+            f"**{get_md_chat_link(self.verify_msg.chat)} 验证失败**\n请 1 分钟后重试",
+        )
         await self.verify_msg.delete()
         logger.debug(
             f"验证失败: 已在 {self.chat.full_name} 中踢出: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
@@ -138,9 +175,9 @@ class EasyValidator(BaseValidator[CallbackQuery]):
             f"验证超时: 已在 {self.chat.full_name} 中临时踢出60秒: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
-    async def refresh_verify_msg(self):
+    async def refresh_verify_msg(self, cli: Client):
         text = f"""证验行进 😀 击点内秒 __**30**__ 在请 [{self.chat_member.user.full_name}](tg://user?id={self.user_id})"""
-        await self.verify_msg.edit(text=text, reply_markup=self.btn("two"))
+        await self.verify_msg.edit(text=text, reply_markup=self.btn(cli, "two"))
         aps.add_job(
             id=f"{self.validator_id}|verify_timeout",
             func=self.verify_timeout,
@@ -148,7 +185,7 @@ class EasyValidator(BaseValidator[CallbackQuery]):
             run_date=datetime.now() + timedelta(seconds=30),
         )
 
-    def btn(self, step: Literal["one", "two"]):
+    def btn(self, cli: Client, step: Literal["one", "two"]):
         button = [
             Ikb(
                 "✅",
@@ -160,8 +197,9 @@ class EasyValidator(BaseValidator[CallbackQuery]):
                 button.append(
                     Ikb(
                         "🥵",
-                        callback_data=str(
-                            CQData(self.validator_id, self.rid, "verify", "fail")
+                        url=build_start_link(
+                            cli,
+                            StartData(self.validator_id, self.rid, "verify", "fail"),
                         ),
                     )
                 )
@@ -169,8 +207,9 @@ class EasyValidator(BaseValidator[CallbackQuery]):
                 button.append(
                     Ikb(
                         "😀",
-                        callback_data=str(
-                            CQData(self.validator_id, self.rid, "verify", "pass")
+                        url=build_start_link(
+                            cli,
+                            StartData(self.validator_id, self.rid, "verify", "pass"),
                         ),
                     )
                 )

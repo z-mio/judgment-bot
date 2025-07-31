@@ -12,7 +12,7 @@ from pyrogram.types import (
 
 from log import logger
 from services.kick_cooldown_manager import kick_cooldown
-from utils.util import get_md_user_url, member_is_admin, delete_messages
+from utils.util import get_md_chat_link, member_is_admin, delete_messages
 
 
 @Client.on_message(filters.command("kick") & filters.group & filters.admin)
@@ -60,7 +60,7 @@ async def member_kick_button(_, msg: Message):
         )
 
     return await msg.reply(
-        f"**确定要击落 {get_md_user_url(msg.reply_to_message.from_user)} 吗?**\n\n**本功能仅可用于击落广告哥, 切勿意气用事**\n否则将进行2倍返还: 被ban的人被封了1小时, 你会被反噬封2小时",
+        f"**确定要击落 {get_md_chat_link(msg.reply_to_message.from_user)} 吗?**\n\n**本功能仅可用于击落广告哥, 切勿意气用事**\n否则将进行2倍返还: 被ban的人被封了1小时, 你会被反噬封2小时",
         reply_markup=Ikm(
             [
                 [
@@ -99,7 +99,7 @@ async def member_kick(cli: Client, msg: Message):
             cli, ad_msg.chat.id, ad_msg.from_user.id, ad_msg.id
         )
         await msg.edit(
-            f"{get_md_user_url(rm.from_user)} 已击落 {get_md_user_url(ad_msg.from_user)}",
+            f"{get_md_chat_link(rm.from_user)} 已击落 {get_md_chat_link(ad_msg.from_user)}",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
 
