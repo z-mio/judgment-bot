@@ -17,7 +17,6 @@ async def verify(cli: Client, msg: ChatMemberUpdated):
     if not await v.init(cli):
         return
     await v.start(cli)
-    await rc.set(v.validator_id, v.dumps())
 
 
 @Client.on_callback_query(filters.regex(r"^@"))
@@ -41,7 +40,7 @@ async def verify_callback(cli: Client, cq: CallbackQuery):
         return None
 
     await v.progress(cli, cq)
-    return await rc.delete(data.validator_id)
+    return None
 
 
 @Client.on_message(start_filter(".*"))
@@ -61,6 +60,5 @@ async def start_handler(cli: Client, msg: Message):
         return None
 
     await v.progress(cli, msg)
-    await rc.delete(data.validator_id)
     msg.stop_propagation()
     return None
