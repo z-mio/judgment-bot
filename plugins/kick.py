@@ -46,6 +46,9 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery):
     elif action == "cancel":
         await kick_cooldown.clear_cooldown(action_user_id)
         await cq.message.edit("已取消操作")
+        await delete_messages(
+            cli, cq.message.chat.id, [cq.message.id, cq.message.reply_to_message.id]
+        )
 
 
 async def member_kick_button(_, msg: Message):
