@@ -74,7 +74,7 @@ async def member_kick_button(_, msg: Message):
         await kick_cooldown.set_cooldown(msg.from_user.id)
     else:
         return await msg.reply(
-            f"冷却中... | 剩余: {await kick_cooldown.get_remaining_time_formatted(msg.from_user.id)}"
+            f"**冷却中... | 剩余: {await kick_cooldown.get_remaining_time_formatted(msg.from_user.id)}**\n如有广告哥, 可喊其他群友帮忙砍一刀"
         )
 
     return await msg.reply(
