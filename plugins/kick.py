@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from pyrogram import Client, filters, enums
-from pyrogram.errors import BadRequest
+from pyrogram.errors import UserNotParticipant
 from pyrogram.types import (
     Message,
     CallbackQuery,
@@ -20,6 +20,10 @@ async def kick(cli: Client, msg: Message):
     if not msg.reply_to_message:
         m = await msg.reply("请回复一条消息")
         await delete_messages(cli, msg.chat.id, [msg.id, m.id])
+    elif msg.reply_to_message.from_user.id == msg.from_user.id:
+        await msg.reply("紫砂吗? 有意思")
+    elif msg.reply_to_message.from_user.id == cli.me.id:
+        await msg.reply("big胆!")
     elif msg.reply_to_message.sender_chat:
         await msg.reply("封禁频道请使用 /bc")
     else:
@@ -45,21 +49,23 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery):
 
 
 async def member_kick_button(_, msg: Message):
-    member = await msg.chat.get_member(msg.from_user.id)
-    ad_member = await msg.chat.get_member(msg.reply_to_message.from_user.id)
     least_joined_days = 30
     ad_joined_days = 30
 
+    member = await msg.chat.get_member(msg.from_user.id)
+    try:
+        ad_member = await msg.chat.get_member(msg.reply_to_message.from_user.id)
+    except UserNotParticipant:
+        ...  # 从关联频道发送的广告, 不在群里
+    else:
+        if joined_days(ad_member.joined_date) > ad_joined_days:
+            return await msg.reply(
+                f"{get_md_chat_link(ad_member.user)} 入群天数大于 `{ad_joined_days}` 天, 无法击落"
+            )
     if (jd := joined_days(member.joined_date)) < least_joined_days:
         return await msg.reply(
             f"此功能需要入群天数大于 `{least_joined_days}` 天\n已入群天数: `{jd}` 天"
         )
-
-    if joined_days(ad_member.joined_date) > ad_joined_days:
-        return await msg.reply(
-            f"{get_md_chat_link(ad_member.user)} 入群天数大于 `{ad_joined_days}` 天, 无法击落"
-        )
-
     if await kick_cooldown.can_user_kick(msg.from_user.id):
         await kick_cooldown.set_cooldown(msg.from_user.id)
     else:
@@ -97,7 +103,7 @@ async def member_kick(cli: Client, msg: Message):
 
     try:
         await cli.ban_chat_member(ad_msg.chat.id, ad_msg.from_user.id)
-    except BadRequest as e:
+    except Exception as e:
         logger.exception(e)
         logger.error("击落失败, 以上为错误信息")
         await msg.edit("击落失败")
@@ -121,7 +127,7 @@ async def member_kick(cli: Client, msg: Message):
         try:
             await cli.send_message(
                 ad_msg.from_user.id,
-                f"**你已被 {get_md_chat_link(rm.from_user)} 踢出 {get_md_chat_link(rm.chat)}**, 如有异议请联系群组管理:\n"
+                f"**你已被 {get_md_chat_link(rm.from_user)} 踢出 {get_md_chat_link(rm.chat)}**\n如有异议请联系群组管理:\n"
                 f"{admins}",
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
@@ -138,7 +144,7 @@ async def admin_kick(cli: Client, msg: Message):
 
     try:
         await cli.ban_chat_member(rm.chat.id, rm.from_user.id)
-    except BadRequest as e:
+    except Exception as e:
         await msg.reply_text("击落失败")
         logger.error(e)
     else:
