@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pyrogram import Client, filters
+from pyrogram import Client, filters, enums
 from pyrogram.errors import BadRequest
 from pyrogram.types import (
     Message,
@@ -110,6 +110,24 @@ async def member_kick(cli: Client, msg: Message):
             f"{get_md_chat_link(rm.from_user)} 已击落 {get_md_chat_link(ad_msg.from_user)}",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
+        admins = "\n".join(
+            [
+                f"• {get_md_chat_link(member.user)}"
+                async for member in rm.chat.get_members(
+                    filter=enums.ChatMembersFilter.ADMINISTRATORS
+                )
+            ]
+        )
+        try:
+            await cli.send_message(
+                ad_msg.from_user.id,
+                f"**你已被 {get_md_chat_link(rm.from_user)} 踢出 {get_md_chat_link(rm.chat)}**, 如有异议请联系群组管理:\n"
+                f"{admins}",
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
+            )
+        except Exception as e:
+            logger.exception(e)
+            logger.error("通知用户失败, 以上为错误信息")
 
 
 async def admin_kick(cli: Client, msg: Message):
