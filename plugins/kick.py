@@ -58,9 +58,10 @@ async def member_kick_button(_, msg: Message):
     except UserNotParticipant:
         ...  # 从关联频道发送的广告, 不在群里
     else:
-        if joined_days(ad_member.joined_date) > ad_joined_days:
+        if (ad_jd := joined_days(ad_member.joined_date)) > ad_joined_days:
             return await msg.reply(
-                f"{get_md_chat_link(ad_member.user)} 入群天数大于 `{ad_joined_days}` 天, 无法击落"
+                f"{get_md_chat_link(ad_member.user)} 入群天数 `{ad_jd}` 大于 `{ad_joined_days}` 天, 无法击落",
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
     if (jd := joined_days(member.joined_date)) < least_joined_days:
         return await msg.reply(
@@ -173,8 +174,10 @@ async def delete_member_messages(
                 await m.delete()
 
 
-def joined_days(joined_date: datetime):
+def joined_days(joined_date: datetime | None):
     """获取入群天数"""
+    if not joined_date:
+        return 114514
     now = datetime.now()
     delta = now - joined_date
     return delta.days
