@@ -149,8 +149,9 @@ async def admin_kick(cli: Client, msg: Message):
     try:
         await cli.ban_chat_member(rm.chat.id, rm.from_user.id)
     except Exception as e:
+        logger.exception(e)
+        logger.error("击落失败, 以上为错误信息")
         await msg.reply_text("击落失败")
-        logger.error(e)
     else:
         await delete_member_messages(cli, rm.chat.id, rm.from_user.id, rm.id)
         m = await msg.reply_text("已击落")
@@ -169,12 +170,14 @@ async def delete_member_messages(
             range(max(msg_id - (limit // 2), 1), msg_id + (limit // 2) + 1)
         ),
     )
+    dms = []
     for m in msgs:
         if m.empty:
             continue
         if m.from_user:
             if m.from_user.id == user_id:
-                await m.delete()
+                dms.append(m.id)
+    await cli.delete_messages(chat_id, dms)
 
 
 def joined_days(joined_date: datetime | None):
