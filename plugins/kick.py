@@ -46,10 +46,18 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery):
 
 async def member_kick_button(_, msg: Message):
     member = await msg.chat.get_member(msg.from_user.id)
+    ad_member = await msg.chat.get_member(msg.reply_to_message.from_user.id)
     least_joined_days = 30
+    ad_joined_days = 30
+
     if (jd := joined_days(member.joined_date)) < least_joined_days:
         return await msg.reply(
             f"此功能需要入群天数大于 `{least_joined_days}` 天\n已入群天数: `{jd}` 天"
+        )
+
+    if joined_days(ad_member.joined_date) > ad_joined_days:
+        return await msg.reply(
+            f"{get_md_chat_link(ad_member.user)} 入群天数大于 `{ad_joined_days}` 天, 无法击落"
         )
 
     if await kick_cooldown.can_user_kick(msg.from_user.id):
