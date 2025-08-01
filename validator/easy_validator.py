@@ -156,6 +156,7 @@ class EasyValidator(BaseValidator):
             reply_markup=Ikm(
                 [[Ikb("返回群组", url=get_chat_link(self.verify_msg.chat))]]
             ),
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         await self.end_text("验证通过")
         logger.debug(

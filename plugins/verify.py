@@ -50,15 +50,20 @@ async def start_handler(cli: Client, msg: Message):
     try:
         v = EasyValidator.loads(await rc.get(data.validator_id))
     except Exception:
-        return await msg.reply("验证已过期")
+        await msg.reply("验证已过期")
+        msg.stop_propagation()
+        return
 
     click_user_id = msg.from_user.id
     if data.operate == "verify" and click_user_id != v.user_id:
-        return await msg.reply("这不是你的验证")
+        await msg.reply("这不是你的验证")
+        msg.stop_propagation()
+        return
 
     if not await v.init(cli):
-        return None
+        msg.stop_propagation()
+        return
 
     await v.progress(cli, msg)
     msg.stop_propagation()
-    return None
+    return
