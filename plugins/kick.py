@@ -78,7 +78,7 @@ async def member_kick_button(_, msg: Message):
         )
 
     return await msg.reply(
-        f"**确定要击落 {get_md_chat_link(msg.reply_to_message.from_user)} 吗?**\n\n**本功能仅可用于击落广告哥, 切勿意气用事**\n否则将进行2倍返还: 被ban的人被封了1小时, 你会被反噬封2小时",
+        f"**确定要击落 {get_md_chat_link(msg.reply_to_message.from_user)} 吗?**\n\n**本功能仅可用于击落广告哥, 切勿意气用事**",
         reply_markup=Ikm(
             [
                 [
