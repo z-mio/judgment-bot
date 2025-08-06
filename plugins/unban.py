@@ -30,7 +30,7 @@ async def unban(cli: Client, msg: Message):
         logger.exception(e)
         logger.error("获取用户信息失败, 以上为错误信息")
         await msg.reply(
-            f"获取 {unban_user} 信息失败",
+            f"获取 `{unban_user}` 信息失败",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
