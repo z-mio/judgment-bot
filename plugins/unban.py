@@ -26,6 +26,16 @@ async def unban(cli: Client, msg: Message):
 
     try:
         unban_user = await cli.get_chat(unban_user)
+    except Exception as e:
+        logger.exception(e)
+        logger.error("获取用户信息失败, 以上为错误信息")
+        await msg.reply(
+            f"获取 {unban_user} 信息失败",
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+        return
+
+    try:
         if unban_user.type == ChatType.PRIVATE:
             await msg.chat.restrict_member(
                 unban_user.id,
