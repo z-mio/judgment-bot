@@ -124,8 +124,8 @@ async def member_kick(cli: Client, msg: Message):
             [
                 f"• {get_md_chat_link(member.user)}"
                 async for member in rm.chat.get_members(
-                    filter=enums.ChatMembersFilter.ADMINISTRATORS
-                )
+                filter=enums.ChatMembersFilter.ADMINISTRATORS
+            )
             ]
         )
         try:
@@ -159,7 +159,7 @@ async def admin_kick(cli: Client, msg: Message):
 
 
 async def delete_member_messages(
-    cli: Client, chat_id: int, user_id: int, msg_id: int, limit: int = 100
+        cli: Client, chat_id: int, user_id: int, msg_id: int, limit: int = 100
 ):
     """
     删除最近 100 条消息
