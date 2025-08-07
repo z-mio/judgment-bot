@@ -51,8 +51,10 @@ async def unban(cli: Client, msg: Message):
                 await cli.send_message(
                     unban_user.id,
                     f"{get_md_chat_link(msg.from_user)} 已在 {get_md_chat_link(msg.chat)} 中将你解除封禁",
-                    reply_markup=Ikm([[Ikb("点击重新加入群组", url=get_chat_link(msg.chat))]]),
-                    link_preview_options=LinkPreviewOptions(is_disabled=True)
+                    reply_markup=Ikm(
+                        [[Ikb("点击重新加入群组", url=get_chat_link(msg.chat))]]
+                    ),
+                    link_preview_options=LinkPreviewOptions(is_disabled=True),
                 )
             except Exception as e:
                 logger.exception(e)

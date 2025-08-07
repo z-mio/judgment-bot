@@ -6,7 +6,7 @@
 
 **实例:** [@Shirai_Kuroko_Bot](https://t.me/Shirai_Kuroko_Bot)
 
-**FAQ:**
+**Q&A:**
 
 > 为什么不使用更严格的入群验证?  
 > 严格的入群验证也拦不住真人广告哥, 机器人广告哥用简单验证也能拦住  
