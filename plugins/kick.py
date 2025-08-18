@@ -126,6 +126,7 @@ async def member_kick(cli: Client, msg: Message):
                 async for member in rm.chat.get_members(
                     filter=enums.ChatMembersFilter.ADMINISTRATORS
                 )
+                if member.user.is_bot is False
             ]
         )
         try:
