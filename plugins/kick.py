@@ -44,7 +44,7 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery):
     if action == "confirm":
         await member_kick(cli, cq.message)
     elif action == "cancel":
-        await kick_cooldown.clear_cooldown(action_user_id)
+        await kick_cooldown.clear_cooldown(cq.message.chat.id, action_user_id)
         await cq.message.edit("已取消操作")
         await delete_messages(
             cli, cq.message.chat.id, [cq.message.id, cq.message.reply_to_message.id]
@@ -70,11 +70,11 @@ async def member_kick_button(_, msg: Message):
         return await msg.reply(
             f"此功能需要入群天数大于 `{least_joined_days}` 天\n已入群天数: `{jd}` 天"
         )
-    if await kick_cooldown.can_user_kick(msg.from_user.id):
-        await kick_cooldown.set_cooldown(msg.from_user.id)
+    if await kick_cooldown.can_user_kick(msg.chat.id, msg.from_user.id):
+        await kick_cooldown.set_cooldown(msg.chat.id, msg.from_user.id)
     else:
         return await msg.reply(
-            f"**冷却中... | 剩余: {await kick_cooldown.get_remaining_time_formatted(msg.from_user.id)}**\n如有广告哥, 可喊其他群友帮忙砍一刀"
+            f"**冷却中... | 剩余: {await kick_cooldown.get_remaining_time_formatted(msg.chat.id, msg.from_user.id)}**\n如有广告哥, 可喊其他群友帮忙砍一刀"
         )
 
     return await msg.reply(
@@ -102,7 +102,7 @@ async def member_kick(cli: Client, msg: Message):
     ad_msg = rm.reply_to_message  # 广告消息
     if await member_is_admin(cli, ad_msg.chat.id, ad_msg.from_user.id):
         await msg.edit("造反吗? 有意思")
-        await kick_cooldown.clear_cooldown(rm.from_user.id)
+        await kick_cooldown.clear_cooldown(rm.chat.id, rm.from_user.id)
         return
 
     try:
@@ -111,7 +111,7 @@ async def member_kick(cli: Client, msg: Message):
         logger.exception(e)
         logger.error("击落失败, 以上为错误信息")
         await msg.edit("击落失败")
-        await kick_cooldown.clear_cooldown(rm.from_user.id)
+        await kick_cooldown.clear_cooldown(rm.chat.id, rm.from_user.id)
     else:
         await delete_member_messages(
             cli, ad_msg.chat.id, ad_msg.from_user.id, ad_msg.id
