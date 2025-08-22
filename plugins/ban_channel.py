@@ -1,5 +1,5 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, LinkPreviewOptions
 
 from log import logger
 from utils.util import delete_messages, get_md_chat_link, member_is_admin
@@ -25,4 +25,7 @@ async def ban_channel(cli: Client, msg: Message):
         logger.error("封禁频道失败, 以上为错误信息")
         return await msg.reply("封禁频道失败")
     else:
-        await msg.reply(f"已封禁 {get_md_chat_link(channel_msg.sender_chat)}")
+        await msg.reply(
+            f"已封禁频道 {get_md_chat_link(channel_msg.sender_chat)}",
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
