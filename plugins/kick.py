@@ -54,8 +54,11 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery):
 async def member_kick_button(_, msg: Message):
     least_joined_days = 30
     ad_joined_days = 30
+    try:
+        member = await msg.chat.get_member(msg.from_user.id)
+    except UserNotParticipant:
+        return await msg.reply("非群组成员, 请先加入群组")
 
-    member = await msg.chat.get_member(msg.from_user.id)
     try:
         ad_member = await msg.chat.get_member(msg.reply_to_message.from_user.id)
     except UserNotParticipant:
