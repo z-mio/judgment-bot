@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -50,15 +50,15 @@ requires-dist = [
 
 [[package]]
 name = "kurigram"
-version = "2.2.7"
+version = "2.2.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyaes" },
     { name = "pysocks" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/23/8a/0bf73959dffc64c47c64cf5e89120ddc52a28f30879888b47194b603a746/kurigram-2.2.7.tar.gz", hash = "sha256:61f3529a0cdc0a0f10f8b98103c6509317d90ebc0ae69959f38a4b684ad244f8", size = 496972, upload-time = "2025-07-13T14:29:22.254Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/42/7247c1f32e42e05e5d9c0c3a59735246430e20431b519c79ebba485e1ea4/kurigram-2.2.9.tar.gz", hash = "sha256:2b2bc468c8953edb496115d41954d17209574913c91fd269c14cf7efb3e8138b", size = 513073, upload-time = "2025-08-25T11:14:28.438Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e0/60/e04aa30e8137a7b2fc007f24552412fe22933eeac160dcff20cdcf6e7e79/kurigram-2.2.7-py3-none-any.whl", hash = "sha256:3ebcfd4f4e7e6e9a2547997b8915ed323f679d9e99fde70a1f30f4c72aee0a97", size = 4933992, upload-time = "2025-07-13T14:29:20.469Z" },
+    { url = "https://files.pythonhosted.org/packages/86/45/943a6a313b6683634dfbc03bd204b93f78cdb7a5a2b1ce0c138274f82fe2/kurigram-2.2.9-py3-none-any.whl", hash = "sha256:2e7834de8289b360362e4702747caa2ee6000ddf4cdb8780ba2057b618f7b773", size = 5013612, upload-time = "2025-08-25T11:14:26.466Z" },
 ]
 
 [[package]]
@@ -126,11 +126,11 @@ wheels = [
 
 [[package]]
 name = "redis"
-version = "6.2.0"
+version = "6.4.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ea/9a/0551e01ba52b944f97480721656578c8a7c46b51b99d66814f85fe3a4f3e/redis-6.2.0.tar.gz", hash = "sha256:e821f129b75dde6cb99dd35e5c76e8c49512a5a0d8dfdc560b2fbd44b85ca977", size = 4639129, upload-time = "2025-05-28T05:01:18.91Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/d6/e8b92798a5bd67d659d51a18170e91c16ac3b59738d91894651ee255ed49/redis-6.4.0.tar.gz", hash = "sha256:b01bc7282b8444e28ec36b261df5375183bb47a07eb9c603f284e89cbc5ef010", size = 4647399, upload-time = "2025-08-07T08:10:11.441Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/67/e60968d3b0e077495a8fee89cf3f2373db98e528288a48f1ee44967f6e8c/redis-6.2.0-py3-none-any.whl", hash = "sha256:c8ddf316ee0aab65f04a11229e94a64b2618451dab7a67cb2f77eb799d872d5e", size = 278659, upload-time = "2025-05-28T05:01:16.955Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/02/89e2ed7e85db6c93dfa9e8f691c5087df4e3551ab39081a4d7c6d1f90e05/redis-6.4.0-py3-none-any.whl", hash = "sha256:f0544fa9604264e9464cdf4814e7d4830f74b165d52f2a330a760a88dd248b7f", size = 279847, upload-time = "2025-08-07T08:10:09.84Z" },
 ]
 
 [[package]]
