@@ -1,0 +1,73 @@
+0456b0ea596e: 紫砂嗎？ 有意思
+09d0c34b4b8a: 已永久踢出
+12d4dc030c47: 點擊重新加入群組
+1f29c978ca6e: '**{get_md_chat_link(self.verify_msg.chat)} 驗證通過**'
+1f386e2ea10f: 廣告哥，擊落！
+26b73d1251ff: '{msg}'
+2a77160d7148: '{content}'
+30364e475d07: 這不是你的操作
+364938079b07: '{content.from_user}'
+45fa2c695fa9: 已擊落
+4b67f02a3434: 由管理 {get_md_chat_link(content.from_user)} 手動通過
+4ff7f8240f10: '**你已被 {get_md_chat_link(rm.from_user)} 踢出 {get_md_chat_link(rm.chat)}**
+
+  如有異議請聯絡群組管理：
+
+  {admins}'
+565fdf53859a: 非群組成員，請先加入群組
+65535de6dc92: 由管理 {get_md_chat_link(content.from_user)} 手動擊落
+6c2115ecc2ff: '**{get_md_chat_link(self.verify_msg.chat)} 驗證失敗**
+
+  請 1 分鐘後重試'
+72abe5fa14d3: 請回覆一則頻道訊息
+7312144cbac5: 擊落失敗
+73949894c1db: '**冷卻中... | 剩餘: {await kick_cooldown.get_remaining_time_formatted(msg.chat.id,
+  msg.from_user.id)}**
+
+  如有廣告哥，可喊其他群友幫忙砍一刀'
+79ce5132b61d: 已放出 {get_md_chat_link(unban_user)}
+7afedd2f48d2: 返回群組
+7e04918e886e: 手滑了
+817610aa0087: 請回覆頻道訊息
+8a90287eabf8: '**確定要擊落 {get_md_chat_link(msg.reply_to_message.from_user)} 嗎？**
+
+
+  **本功能僅可用於擊落廣告哥，切勿意氣用事**'
+92e3a830ae9a: 幫助
+95749343fed8: 造反嗎？ 有意思
+a3e3b88377c8: 開始
+b2b524821cc9: 封禁頻道請使用 /bc
+bd8c756e7924: 封禁頻道失敗
+c1ee73dfc92f: '請加上使用者名稱或 id
+
+  例： `/unban @username`'
+c61f804a9958: 獲取 `{unban_user}` 資訊失敗
+c8d7362a00c1: 權限不足
+c8ed40af510b: 放出 {get_md_chat_link(unban_user)} 失敗
+cb88e1558d07: 請回覆一則訊息
+cf9737cb07bc: 驗證已過期
+d20589eb36a2: 已取消操作
+d34cff6e5250: 已封禁頻道 {get_md_chat_link(channel_msg.sender_chat)}
+d442dd9031b1: 封禁使用者並踢出群聊
+d610cf50b6ff: '{get_md_chat_link(ad_member.user)} 入群天數 `{ad_jd}` 天，大於 `{ad_joined_days}`
+  天，無法擊落'
+d72fc56f7b40: 解封使用者/頻道
+e0656adea3ae: 這不是你的驗證
+e2c747f5ddc2: '{get_md_chat_link(rm.from_user)} 已擊落 {get_md_chat_link(ad_msg.from_user)}'
+ebdae8dbbed7: '此功能需要入群天數大於 `{least_joined_days}` 天
+
+  已入群天數：`{jd}` 天'
+ebe0b0c73f82: '**呀哈囉!**
+
+
+  指令列表:
+
+  {cmd_list_text(msg)}
+
+
+  **專案地址:** [Github](https://github.com/z-mio/judgment-bot)'
+ecfa64c174d3: 已通過
+f1798b4fd5fc: 封禁頻道馬甲
+f59f0e626cdb: '{get_md_chat_link(msg.from_user)} 已在 {get_md_chat_link(msg.chat)} 中將你解除封禁'
+f662ba5156a9: big膽！
+f791f55eb70b: 禁止窩裡鬥

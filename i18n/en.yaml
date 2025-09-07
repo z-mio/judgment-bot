@@ -1,0 +1,64 @@
+0456b0ea596e: Purple clay? Interesting
+09d0c34b4b8a: Permanently kicked out
+12d4dc030c47: Click to rejoin the group
+1f29c978ca6e: '**{get_md_chat_link(self.verify_msg.chat)} verified**'
+1f386e2ea10f: Ad guy, take him down!
+26b73d1251ff: '{msg}'
+2a77160d7148: '{content}'
+30364e475d07: This isn't your operation
+364938079b07: '{content.from_user}'
+45fa2c695fa9: Taken down
+4b67f02a3434: Manually approved by admin {get_md_chat_link(content.from_user)}
+4ff7f8240f10: '**You have been kicked out of {get_md_chat_link(rm.chat)} by {get_md_chat_link(rm.from_user)}**
+
+  If you disagree, please contact the group administrators:
+
+  {admins}'
+565fdf53859a: Not a group member, please join the group first
+65535de6dc92: Manually rejected by admin {get_md_chat_link(content.from_user)}
+6c2115ecc2ff: '**{get_md_chat_link(self.verify_msg.chat)} verification failed**\nPlease
+  try again in 1 minute'
+72abe5fa14d3: Please reply to a channel message
+7312144cbac5: Take-down failed
+73949894c1db: '**Cooling down... | Remaining: {await kick_cooldown.get_remaining_time_formatted(msg.chat.id,
+  msg.from_user.id)}**
+
+  If there is an ad guy, you can ask other group members to help land a hit'
+79ce5132b61d: Released {get_md_chat_link(unban_user)}
+7afedd2f48d2: Back to group
+7e04918e886e: My hand slipped
+817610aa0087: Please reply to the channel message
+8a90287eabf8: '**Are you sure you want to take down {get_md_chat_link(msg.reply_to_message.from_user)}?**
+
+
+  **This feature may only be used to take down ad guys; do not act on impulse**'
+92e3a830ae9a: Help
+95749343fed8: Rebelling? Interesting
+a3e3b88377c8: Start
+b2b524821cc9: To ban a channel please use /bc
+bd8c756e7924: Failed to ban channel
+c1ee73dfc92f: 'Please include a username or id\n e.g.: `/unban @username`'
+c61f804a9958: Failed to get `{unban_user}` information
+c8d7362a00c1: Insufficient permissions
+c8ed40af510b: Failed to release {get_md_chat_link(unban_user)}
+cb88e1558d07: Please reply to a message
+cf9737cb07bc: Verification expired
+d20589eb36a2: Operation canceled
+d34cff6e5250: Channel {get_md_chat_link(channel_msg.sender_chat)} banned
+d442dd9031b1: Ban user and kick from group chat
+d610cf50b6ff: '{get_md_chat_link(ad_member.user)} has been in the group for `{ad_jd}`
+  days, which is more than `{ad_joined_days}` days and cannot be taken down'
+d72fc56f7b40: Unban user/channel
+e0656adea3ae: This is not your verification
+e2c747f5ddc2: '{get_md_chat_link(rm.from_user)} has taken down {get_md_chat_link(ad_msg.from_user)}'
+ebdae8dbbed7: 'This feature requires being in the group for more than `{least_joined_days}`
+  days
+
+  Days in group: `{jd}` days'
+ebe0b0c73f82: '**Yah hello!**\n\nCommand list:\n{cmd_list_text(msg)}\n\n**Project
+  URL:** [Github](https://github.com/z-mio/judgment-bot)'
+ecfa64c174d3: Approved
+f1798b4fd5fc: Ban channel alias
+f59f0e626cdb: '{get_md_chat_link(msg.from_user)} has unbanned you in {get_md_chat_link(msg.chat)}'
+f662ba5156a9: So bold!
+f791f55eb70b: No infighting allowed
