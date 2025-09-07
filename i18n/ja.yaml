@@ -3,10 +3,7 @@
 12d4dc030c47: クリックしてグループに再参加
 1f29c978ca6e: '**{get_md_chat_link(self.verify_msg.chat)} 検証済み**'
 1f386e2ea10f: 広告兄さん、撃ち落とせ！
-26b73d1251ff: '{msg}'
-2a77160d7148: '{content}'
 30364e475d07: これはあなたの操作ではありません
-364938079b07: '{content.from_user}'
 45fa2c695fa9: 撃墜済み
 4b67f02a3434: 管理者 {get_md_chat_link(content.from_user)} によって手動で承認されました
 4ff7f8240f10: '**あなたは {get_md_chat_link(rm.from_user)} によって {get_md_chat_link(rm.chat)}
@@ -34,6 +31,7 @@ c8d7362a00c1: 権限が不足しています
 c8ed40af510b: '{get_md_chat_link(unban_user)} の解放に失敗しました'
 cb88e1558d07: メッセージに返信してください
 cf9737cb07bc: 検証の有効期限が切れました
+d1ca6194a363: 検証に合格しました
 d20589eb36a2: 操作はキャンセルされました
 d34cff6e5250: チャンネル {get_md_chat_link(channel_msg.sender_chat)} を封禁しました
 d442dd9031b1: ユーザーを禁止してグループチャットから追放する

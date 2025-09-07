@@ -3,10 +3,7 @@
 12d4dc030c47: Click to rejoin the group
 1f29c978ca6e: '**{get_md_chat_link(self.verify_msg.chat)} verified**'
 1f386e2ea10f: Ad guy, take him down!
-26b73d1251ff: '{msg}'
-2a77160d7148: '{content}'
 30364e475d07: This isn't your operation
-364938079b07: '{content.from_user}'
 45fa2c695fa9: Taken down
 4b67f02a3434: Manually approved by admin {get_md_chat_link(content.from_user)}
 4ff7f8240f10: '**You have been kicked out of {get_md_chat_link(rm.chat)} by {get_md_chat_link(rm.from_user)}**
@@ -62,3 +59,4 @@ f1798b4fd5fc: Ban channel alias
 f59f0e626cdb: '{get_md_chat_link(msg.from_user)} has unbanned you in {get_md_chat_link(msg.chat)}'
 f662ba5156a9: So bold!
 f791f55eb70b: No infighting allowed
+translated: '{''d1ca6194a363'': ''Verification passed''}'

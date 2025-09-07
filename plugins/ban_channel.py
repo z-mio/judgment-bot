@@ -8,7 +8,7 @@ from utils.util import delete_messages, get_md_chat_link, member_is_admin
 
 @Client.on_message(filters.command("bc") & filters.group & filters.admin)
 async def ban_channel(cli: Client, msg: Message):
-    _t = t_(msg)
+    _t = t_[msg]
 
     if not await member_is_admin(cli, msg.chat.id, msg.from_user.id):
         return await msg.reply(_t("权限不足"))

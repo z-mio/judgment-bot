@@ -3,10 +3,7 @@
 12d4dc030c47: 點擊重新加入群組
 1f29c978ca6e: '**{get_md_chat_link(self.verify_msg.chat)} 驗證通過**'
 1f386e2ea10f: 廣告哥，擊落！
-26b73d1251ff: '{msg}'
-2a77160d7148: '{content}'
 30364e475d07: 這不是你的操作
-364938079b07: '{content.from_user}'
 45fa2c695fa9: 已擊落
 4b67f02a3434: 由管理 {get_md_chat_link(content.from_user)} 手動通過
 4ff7f8240f10: '**你已被 {get_md_chat_link(rm.from_user)} 踢出 {get_md_chat_link(rm.chat)}**
@@ -46,6 +43,7 @@ c8d7362a00c1: 權限不足
 c8ed40af510b: 放出 {get_md_chat_link(unban_user)} 失敗
 cb88e1558d07: 請回覆一則訊息
 cf9737cb07bc: 驗證已過期
+d1ca6194a363: 驗證通過
 d20589eb36a2: 已取消操作
 d34cff6e5250: 已封禁頻道 {get_md_chat_link(channel_msg.sender_chat)}
 d442dd9031b1: 封禁使用者並踢出群聊

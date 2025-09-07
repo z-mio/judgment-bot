@@ -114,7 +114,7 @@ class EasyValidator(BaseValidator):
         await self.verify_end()
 
     async def admin_verify_fail(self, content: CallbackQuery):
-        _t = t_(content.from_user)
+        _t = t_[content.from_user]
 
         if aps.get_job(f"{self.validator_id}|verify_timeout"):
             aps.remove_job(f"{self.validator_id}|verify_timeout")
@@ -129,7 +129,7 @@ class EasyValidator(BaseValidator):
         )
 
     async def admin_verify_pass(self, content: CallbackQuery):
-        _t = t_(content.from_user)
+        _t = t_[content.from_user]
 
         if aps.get_job(f"{self.validator_id}|verify_timeout"):
             aps.remove_job(f"{self.validator_id}|verify_timeout")
@@ -153,7 +153,7 @@ class EasyValidator(BaseValidator):
         )
 
     async def verify_pass(self, content: Message):
-        _t = t_(content)
+        _t = t_[content]
 
         if aps.get_job(f"{self.validator_id}|verify_timeout"):
             aps.remove_job(f"{self.validator_id}|verify_timeout")
@@ -175,13 +175,13 @@ class EasyValidator(BaseValidator):
             ),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        await self.end_text("验证通过")
+        await self.end_text(_t("验证通过"))
         logger.debug(
             f"验证通过: 已在 {self.chat.full_name} 中通过验证: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
     async def verify_fail(self, content: Message):
-        _t = t_(content)
+        _t = t_[content]
 
         if aps.get_job(f"{self.validator_id}|refresh_verify_msg"):
             aps.remove_job(f"{self.validator_id}|refresh_verify_msg")
