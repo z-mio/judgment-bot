@@ -17,6 +17,7 @@ from pyrogram.types import (
     LinkPreviewOptions,
 )
 
+from i18n import t_
 from log import logger
 from services.redis_client import rc
 from utils.aps import aps
@@ -113,17 +114,23 @@ class EasyValidator(BaseValidator):
         await self.verify_end()
 
     async def admin_verify_fail(self, content: CallbackQuery):
+        _t = t_(content.from_user)
+
         if aps.get_job(f"{self.validator_id}|verify_timeout"):
             aps.remove_job(f"{self.validator_id}|verify_timeout")
 
         await self.chat.ban_member(self.user_id)
-        await content.answer("已永久踢出")
-        await self.end_text(f"由管理 {get_md_chat_link(content.from_user)} 手动击落")
+        await content.answer(_t("已永久踢出"))
+        await self.end_text(
+            _t(f"由管理 {get_md_chat_link(content.from_user)} 手动击落")
+        )
         logger.debug(
             f"验证失败(管理手动踢出): 已在 {self.chat.full_name} 中踢出: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
     async def admin_verify_pass(self, content: CallbackQuery):
+        _t = t_(content.from_user)
+
         if aps.get_job(f"{self.validator_id}|verify_timeout"):
             aps.remove_job(f"{self.validator_id}|verify_timeout")
 
@@ -137,13 +144,17 @@ class EasyValidator(BaseValidator):
                 can_add_web_page_previews=True,
             ),
         )
-        await content.answer("已通过")
-        await self.end_text(f"由管理 {get_md_chat_link(content.from_user)} 手动通过")
+        await content.answer(_t("已通过"))
+        await self.end_text(
+            _t(f"由管理 {get_md_chat_link(content.from_user)} 手动通过")
+        )
         logger.debug(
             f"验证通过: 已在 {self.chat.full_name} 中通过验证: {self.chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
     async def verify_pass(self, content: Message):
+        _t = t_(content)
+
         if aps.get_job(f"{self.validator_id}|verify_timeout"):
             aps.remove_job(f"{self.validator_id}|verify_timeout")
 
@@ -158,9 +169,9 @@ class EasyValidator(BaseValidator):
             ),
         )
         await content.reply(
-            f"**{get_md_chat_link(self.verify_msg.chat)} 验证通过**",
+            _t(f"**{get_md_chat_link(self.verify_msg.chat)} 验证通过**"),
             reply_markup=Ikm(
-                [[Ikb("返回群组", url=get_chat_link(self.verify_msg.chat))]]
+                [[Ikb(_t("返回群组"), url=get_chat_link(self.verify_msg.chat))]]
             ),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
@@ -170,13 +181,17 @@ class EasyValidator(BaseValidator):
         )
 
     async def verify_fail(self, content: Message):
+        _t = t_(content)
+
         if aps.get_job(f"{self.validator_id}|refresh_verify_msg"):
             aps.remove_job(f"{self.validator_id}|refresh_verify_msg")
 
         until_date = datetime.now() + timedelta(seconds=60)
         await self.chat.ban_member(self.user_id, until_date)
         await content.reply(
-            f"**{get_md_chat_link(self.verify_msg.chat)} 验证失败**\n请 1 分钟后重试",
+            _t(
+                f"**{get_md_chat_link(self.verify_msg.chat)} 验证失败**\n请 1 分钟后重试"
+            ),
         )
         await self.end_text("验证未通过, 已击落")
         logger.debug(

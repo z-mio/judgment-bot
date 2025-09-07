@@ -8,18 +8,21 @@ from pyrogram.types import (
 )
 from pyrogram.enums.chat_type import ChatType
 
+from i18n import t_
 from log import logger
 from utils.util import member_is_admin, get_md_chat_link, get_chat_link
 
 
 @Client.on_message(filters.command("unban") & filters.group & filters.admin)
 async def unban(cli: Client, msg: Message):
+    _t = t_[msg]
+
     if not await member_is_admin(cli, msg.chat.id, msg.from_user.id):
-        await msg.reply("权限不足")
+        await msg.reply(_t("权限不足"))
         return
 
     if not msg.command[1:]:
-        await msg.reply("请加上用户名或id\n例: `/unban @username`")
+        await msg.reply(_t("请加上用户名或id\n例: `/unban @username`"))
         return
 
     unban_user = msg.command[1]
@@ -30,7 +33,7 @@ async def unban(cli: Client, msg: Message):
         logger.exception(e)
         logger.error("获取用户信息失败, 以上为错误信息")
         await msg.reply(
-            f"获取 `{unban_user}` 信息失败",
+            _t(f"获取 `{unban_user}` 信息失败"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
@@ -50,9 +53,11 @@ async def unban(cli: Client, msg: Message):
             try:
                 await cli.send_message(
                     unban_user.id,
-                    f"{get_md_chat_link(msg.from_user)} 已在 {get_md_chat_link(msg.chat)} 中将你解除封禁",
+                    _t(
+                        f"{get_md_chat_link(msg.from_user)} 已在 {get_md_chat_link(msg.chat)} 中将你解除封禁"
+                    ),
                     reply_markup=Ikm(
-                        [[Ikb("点击重新加入群组", url=get_chat_link(msg.chat))]]
+                        [[Ikb(_t("点击重新加入群组"), url=get_chat_link(msg.chat))]]
                     ),
                     link_preview_options=LinkPreviewOptions(is_disabled=True),
                 )
@@ -66,13 +71,13 @@ async def unban(cli: Client, msg: Message):
         logger.exception(e)
         logger.error("放出用户失败, 以上为错误信息")
         await msg.reply(
-            f"放出 {get_md_chat_link(unban_user)} 失败",
+            _t(f"放出 {get_md_chat_link(unban_user)} 失败"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
     else:
         await msg.reply(
-            f"已放出 {get_md_chat_link(unban_user)}",
+            _t(f"已放出 {get_md_chat_link(unban_user)}"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
