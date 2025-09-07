@@ -68,10 +68,16 @@ class EasyValidator(BaseValidator):
     async def start(self, cli: Client):
         await self.chat.restrict_member(self.user_id, ChatPermissions())
         random_number = random.randint(5, 10)
-        text = (
-            f"**击点前提勿请**, 证验行进 😀 击点时 😀 成变 🥵 后秒 __**{random_number}**__ "
+        cn_text = (
+            f"**击点前提勿请**, 证验行进 😀 击点时 😀 成变 🥵 ,后秒 __**{random_number}**__ "
             f"在请 {get_md_chat_link(self.chat_member.user)}"
         )
+        en_text = (
+            f"{get_md_chat_link(self.chat_member.user)} Please wait __**{random_number}**__ seconds, "
+            f"then click 😀 to verify once 🥵 changes to 😀. "
+            f"**Do not click early!**"
+        )
+        text = f"{cn_text}\n\n{en_text}"
         verify_msg = await self.cli.send_message(
             chat_id=self.chat_id,
             text=text,
@@ -187,7 +193,9 @@ class EasyValidator(BaseValidator):
         )
 
     async def refresh_verify_msg(self, cli: Client):
-        text = f"""证验行进 😀 击点内秒 __**30**__ 在请 {get_md_chat_link(self.chat_member.user)}"""
+        cn_text = f"""证验行进 😀 击点内秒 __**30**__ 在请 {get_md_chat_link(self.chat_member.user)}"""
+        en_text = f"""{get_md_chat_link(self.chat_member.user)} Please complete verification by clicking 😀 within **30** seconds"""
+        text = f"{cn_text}\n\n{en_text}"
         await self.verify_msg.edit(
             text=text,
             reply_markup=self.btn(cli, "two"),
