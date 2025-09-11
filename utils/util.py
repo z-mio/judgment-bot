@@ -13,13 +13,13 @@ def get_hash(text) -> str:
 
 def get_md_chat_link(user: User | Chat):
     """获取 Markdown 格式的用户链接。"""
-    if user.username:
-        return f"[{user.full_name}](https://t.me/{user.username})"
+    # if user.username:
+    #     return f"[{user.full_name}](https://t.me/{user.username})"
+
+    if isinstance(user, User):
+        return f"[{user.full_name}](tg://user?id={user.id})"
     else:
-        if isinstance(user, User):
-            return f"[{user.full_name}](tg://user?id={user.id})"
-        else:
-            return f"[{user.full_name}](https://t.me/c/-100{user.id})"
+        return f"[{user.full_name}](https://t.me/c/-100{user.id})"
 
 
 def get_chat_link(chat: Chat):
