@@ -40,6 +40,7 @@ c8d7362a00c1: Insufficient permissions
 c8ed40af510b: Failed to release {get_md_chat_link(unban_user)}
 cb88e1558d07: Please reply to a message
 cf9737cb07bc: Verification expired
+d1ca6194a363: Verification passed
 d20589eb36a2: Operation canceled
 d34cff6e5250: Channel {get_md_chat_link(channel_msg.sender_chat)} banned
 d442dd9031b1: Ban user and kick from group chat
@@ -59,4 +60,3 @@ f1798b4fd5fc: Ban channel alias
 f59f0e626cdb: '{get_md_chat_link(msg.from_user)} has unbanned you in {get_md_chat_link(msg.chat)}'
 f662ba5156a9: So bold!
 f791f55eb70b: No infighting allowed
-translated: '{''d1ca6194a363'': ''Verification passed''}'

@@ -21,5 +21,5 @@ t_ = i18n.i18n(post_lang_selector=MyPostLanguageSelector)
 if __name__ == "__main__":
     i18n.build(
         target_lang=["en", "ru", "ja", "zh-hant"],
-        translator=OpenAIBulkTranslator(model="gpt-5-mini"),
+        translator=OpenAIBulkTranslator(model="gpt-4.1-mini"),
     )
