@@ -1,3 +1,4 @@
+import asyncio
 import sys
 
 from pyrogram import Client
@@ -8,6 +9,9 @@ from utils.aps import aps
 from utils.optimized_event_loop import setup_optimized_event_loop
 
 logger.remove()
+setup_optimized_event_loop()
+loop = asyncio.new_event_loop()
+
 if cfg.debug:
     logger.add(sys.stderr, level="DEBUG")
     logger.debug("Debug模式已启用")
@@ -33,6 +37,7 @@ class Bot(Client):
             bot_token=self.cfg.bot_token,
             plugins=dict(root="plugins"),
             proxy=self.cfg.proxy.dict_format,
+            loop=loop
         )
 
     async def start(self, **kwargs):
