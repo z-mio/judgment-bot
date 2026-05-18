@@ -10,6 +10,7 @@ from log import logger, setup_logging
 from plugins import (
     ban_channel,
     del_service_msg,
+    delete_guest_bot_messages,
     kick,
     recent_messages,
     start,
@@ -37,6 +38,7 @@ def register_routers(dp: Dispatcher) -> None:
     dp.include_router(unban.router)
     dp.include_router(ban_channel.router)
     dp.include_router(del_service_msg.router)
+    dp.include_router(delete_guest_bot_messages.router)
     dp.include_router(recent_messages.router)
 
 
