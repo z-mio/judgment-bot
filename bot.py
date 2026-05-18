@@ -52,6 +52,5 @@ class Bot(Client):
 
 
 if __name__ == "__main__":
-    setup_optimized_event_loop()
     bot = Bot()
     bot.run()
