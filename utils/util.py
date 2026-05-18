@@ -63,11 +63,19 @@ async def delete_messages(
     try:
         if delay:
             await asyncio.sleep(delay)
-        for message_id in message_ids:
+        ids = list(dict.fromkeys(message_ids))
+        for index in range(0, len(ids), 100):
+            chunk = ids[index : index + 100]
+            if not chunk:
+                continue
             try:
-                await bot.delete_message(chat_id, message_id)
+                await bot.delete_messages(chat_id, chunk)
             except TelegramBadRequest:
-                pass
+                for message_id in chunk:
+                    try:
+                        await bot.delete_message(chat_id, message_id)
+                    except TelegramBadRequest:
+                        pass
     except Exception:
         pass
 

@@ -7,7 +7,15 @@ from aiogram.enums import ParseMode
 
 from core.config import bs
 from log import logger, setup_logging
-from plugins import ban_channel, del_service_msg, kick, start, unban, verify
+from plugins import (
+    ban_channel,
+    del_service_msg,
+    kick,
+    recent_messages,
+    start,
+    unban,
+    verify,
+)
 from services.redis_client import check_redis_connection, rc
 from utils.aps import aps
 from utils.optimized_event_loop import setup_optimized_event_loop
@@ -29,6 +37,7 @@ def register_routers(dp: Dispatcher) -> None:
     dp.include_router(unban.router)
     dp.include_router(ban_channel.router)
     dp.include_router(del_service_msg.router)
+    dp.include_router(recent_messages.router)
 
 
 async def main() -> None:

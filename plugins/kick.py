@@ -12,6 +12,7 @@ from aiogram.types import (
 from i18n import t_
 from log import logger
 from services.kick_cooldown_manager import kick_cooldown
+from services.recent_message_cache import get_recent_message_ids_by_user
 from utils.util import delete_messages, get_md_chat_link, member_is_admin
 
 router = Router()
@@ -169,7 +170,8 @@ async def member_kick(
         await kick_cooldown.clear_cooldown(message.chat.id, action_user_id)
     else:
         command_message_id = command_message.message_id if command_message else None
-        ids = [target_message_id]
+        ids = await get_recent_message_ids_by_user(message.chat.id, target_user_id)
+        ids.append(target_message_id)
         if command_message_id:
             ids.append(command_message_id)
 
@@ -226,8 +228,8 @@ async def admin_kick(message: Message, bot: Bot) -> None:
         logger.error("击落失败, 以上为错误信息")
         await message.reply(_t("击落失败"))
     else:
-        await delete_messages(
-            bot, rm.chat.id, [rm.message_id, message.message_id], delay=0
-        )
+        ids = await get_recent_message_ids_by_user(rm.chat.id, rm.from_user.id)
+        ids.extend([rm.message_id, message.message_id])
+        await delete_messages(bot, rm.chat.id, ids, delay=0)
         m = await message.answer(_t("已击落"))
         await delete_messages(bot, message.chat.id, [m.message_id])
