@@ -1,34 +1,43 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message, LinkPreviewOptions
+from aiogram import Bot, F, Router
+from aiogram.filters import Command
+from aiogram.types import LinkPreviewOptions, Message
 
 from i18n import t_
 from log import logger
 from utils.util import delete_messages, get_md_chat_link, member_is_admin
 
+router = Router()
 
-@Client.on_message(filters.command("bc") & filters.group & filters.admin)
-async def ban_channel(cli: Client, msg: Message):
-    _t = t_[msg]
 
-    if not await member_is_admin(cli, msg.chat.id, msg.from_user.id):
-        return await msg.reply(_t("权限不足"))
+@router.message(Command("bc"), F.chat.type.in_({"group", "supergroup"}))
+async def ban_channel(message: Message, bot: Bot) -> None:
+    _t = t_[message]
 
-    channel_msg = msg.reply_to_message
+    if not message.from_user or not await member_is_admin(
+        bot, message.chat.id, message.from_user.id
+    ):
+        await message.reply(_t("权限不足"))
+        return
+
+    channel_msg = message.reply_to_message
     if not channel_msg:
-        m = await msg.reply(_t("请回复一条频道消息"))
-        return await delete_messages(cli, msg.chat.id, [msg.id, m.id])
+        m = await message.reply(_t("请回复一条频道消息"))
+        await delete_messages(bot, message.chat.id, [message.message_id, m.message_id])
+        return
     if not channel_msg.sender_chat:
-        m = await msg.reply(_t("请回复频道消息"))
-        return await delete_messages(cli, msg.chat.id, [msg.id, m.id])
+        m = await message.reply(_t("请回复频道消息"))
+        await delete_messages(bot, message.chat.id, [message.message_id, m.message_id])
+        return
 
     try:
-        await msg.chat.ban_member(channel_msg.sender_chat.id)
+        await bot.ban_chat_sender_chat(message.chat.id, channel_msg.sender_chat.id)
     except Exception as e:
         logger.exception(e)
         logger.error("封禁频道失败, 以上为错误信息")
-        return await msg.reply(_t("封禁频道失败"))
+        await message.reply(_t("封禁频道失败"))
+        return
     else:
-        await msg.reply(
+        await message.reply(
             _t(f"已封禁频道 {get_md_chat_link(channel_msg.sender_chat)}"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )

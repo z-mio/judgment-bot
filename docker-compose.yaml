@@ -42,11 +42,9 @@ services:
       - REDIS_PORT=6379
     volumes:
       - ./logs:/app/logs
-      - sessions:/app/sessions
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
 volumes:
   redis_data:
-  sessions:

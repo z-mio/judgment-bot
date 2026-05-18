@@ -1,11 +1,13 @@
-from easy_ai18n.core.i18n import PostLocaleSelector
-from pyrogram.types import Message, User
+from typing import Any
+
+from aiogram.types import Message, User
 from easy_ai18n import EasyAI18n
+from easy_ai18n.core.i18n import PostLocaleSelector
 from easy_ai18n.translator import OpenAIBulkTranslator
 
 
 class MyPostLocaleSelector(PostLocaleSelector):
-    def __getitem__(self, msg: Message | User | str | None):
+    def __getitem__(self, msg: Message | User | str | None) -> Any:
         if isinstance(msg, Message):
             lang = msg.from_user.language_code if msg.from_user else None
         elif isinstance(msg, User):

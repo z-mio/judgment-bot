@@ -1,74 +1,82 @@
-from pyrogram.enums import ChatMemberStatus
+from aiogram import Bot, F, Router
+from aiogram.enums import ChatMemberStatus
+from aiogram.filters import CommandObject, CommandStart
+from aiogram.types import CallbackQuery, ChatMemberUpdated, Message
 
 from i18n import t_
-from utils.filters import new_members, start_filter
-from validator import CQData, EasyValidator, StartData
-from pyrogram import Client, filters
-from pyrogram.types import (
-    CallbackQuery,
-    ChatMemberUpdated,
-    Message,
-)
 from services.redis_client import rc
+from utils.filters import new_members
+from validator import CQData, EasyValidator, StartData
+
+router = Router()
 
 
-@Client.on_chat_member_updated(new_members & filters.admin)
-async def verify(cli: Client, msg: ChatMemberUpdated):
-    v = EasyValidator(msg.chat.id, msg.from_user.id)
-    if not await v.init(cli):
+@router.chat_member(new_members)
+async def verify(event: ChatMemberUpdated, bot: Bot) -> None:
+    v = EasyValidator(event.chat.id, event.from_user.id)
+    if not await v.init(bot):
         return
-    await v.start(cli)
+    await v.start(bot)
 
 
-@Client.on_callback_query(filters.regex(r"^@"))
-async def verify_callback(cli: Client, cq: CallbackQuery):
-    _t = t_[cq.from_user]
+@router.callback_query(F.data.startswith("@"))
+async def verify_callback(callback: CallbackQuery, bot: Bot) -> None:
+    _t = t_[callback.from_user]
 
-    data = CQData.parse(cq.data)
     try:
+        if not callback.data:
+            raise ValueError("callback data is empty")
+        data = CQData.parse(callback.data)
         v = EasyValidator.loads(await rc.get(data.validator_id))
     except Exception:
-        return await cq.answer(_t("验证已过期"), show_alert=True)
+        await callback.answer(_t("验证已过期"), show_alert=True)
+        return
 
-    click_user = await cq.message.chat.get_member(cq.from_user.id)
+    if not callback.message:
+        await callback.answer(_t("验证已过期"), show_alert=True)
+        return
+
+    click_user = await bot.get_chat_member(
+        callback.message.chat.id, callback.from_user.id
+    )
     if data.operate == "verify" and click_user.user.id != v.user_id:
-        return await cq.answer(_t("这不是你的验证"), show_alert=True)
-    if data.operate == "admin" and click_user.status not in [
-        ChatMemberStatus.OWNER,
+        await callback.answer(_t("这不是你的验证"), show_alert=True)
+        return
+    if data.operate == "admin" and click_user.status not in {
+        ChatMemberStatus.CREATOR,
         ChatMemberStatus.ADMINISTRATOR,
-    ]:
-        return await cq.answer(_t("权限不足"), show_alert=True)
+    }:
+        await callback.answer(_t("权限不足"), show_alert=True)
+        return
 
-    if not await v.init(cli):
+    if not await v.init(bot):
         return None
 
-    await v.progress(cli, cq)
+    await v.progress(bot, callback)
     return None
 
 
-@Client.on_message(start_filter(".*"))
-async def start_handler(cli: Client, msg: Message):
-    _t = t_[msg]
+@router.message(CommandStart(deep_link=True, deep_link_encoded=True))
+async def start_handler(message: Message, command: CommandObject, bot: Bot) -> None:
+    _t = t_[message]
 
-    text = msg.text.replace("/start ", "")
-    data = StartData.parse(text)
+    text = command.args or ""
     try:
+        data = StartData.parse(text)
         v = EasyValidator.loads(await rc.get(data.validator_id))
     except Exception:
-        await msg.reply(_t("验证已过期"))
-        msg.stop_propagation()
+        await message.reply(_t("验证已过期"))
         return
 
-    click_user_id = msg.from_user.id
+    if not message.from_user:
+        return
+
+    click_user_id = message.from_user.id
     if data.operate == "verify" and click_user_id != v.user_id:
-        await msg.reply(_t("这不是你的验证"))
-        msg.stop_propagation()
+        await message.reply(_t("这不是你的验证"))
         return
 
-    if not await v.init(cli):
-        msg.stop_propagation()
+    if not await v.init(bot):
         return
 
-    await v.progress(cli, msg)
-    msg.stop_propagation()
-    return
+    await v.progress(bot, message, text)

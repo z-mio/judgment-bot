@@ -1,63 +1,79 @@
-from pyrogram import Client, filters
-from pyrogram.types import (
-    Message,
-    ChatPermissions,
-    LinkPreviewOptions,
-    InlineKeyboardMarkup as Ikm,
+from aiogram import Bot, F, Router
+from aiogram.enums import ChatType
+from aiogram.filters import Command, CommandObject
+from aiogram.types import (
     InlineKeyboardButton as Ikb,
+    InlineKeyboardMarkup as Ikm,
+    LinkPreviewOptions,
+    Message,
 )
-from pyrogram.enums.chat_type import ChatType
 
 from i18n import t_
 from log import logger
-from utils.util import member_is_admin, get_md_chat_link, get_chat_link
+from utils.util import get_chat_link, get_md_chat_link, html_code, member_is_admin
+from validator.easy_validator import full_chat_permissions
+
+router = Router()
 
 
-@Client.on_message(filters.command("unban") & filters.group & filters.admin)
-async def unban(cli: Client, msg: Message):
-    _t = t_[msg]
+@router.message(Command("unban"), F.chat.type.in_({"group", "supergroup"}))
+async def unban(message: Message, command: CommandObject, bot: Bot) -> None:
+    _t = t_[message]
 
-    if not await member_is_admin(cli, msg.chat.id, msg.from_user.id):
-        await msg.reply(_t("权限不足"))
+    if not message.from_user or not await member_is_admin(
+        bot, message.chat.id, message.from_user.id
+    ):
+        await message.reply(_t("权限不足"))
         return
 
-    if not msg.command[1:]:
-        await msg.reply(_t("请加上用户名或id\n例: `/unban @username`"))
+    if not command.args:
+        await message.reply(_t("请加上用户名或id\n例: <code>/unban @username</code>"))
         return
 
-    unban_user = msg.command[1]
+    unban_user_id = command.args.split(maxsplit=1)[0]
 
     try:
-        unban_user = await cli.get_chat(unban_user)
+        unban_user = await bot.get_chat(unban_user_id)
     except Exception as e:
         logger.exception(e)
         logger.error("获取用户信息失败, 以上为错误信息")
-        await msg.reply(
-            _t(f"获取 `{unban_user}` 信息失败"),
+        await message.reply(
+            _t(f"获取 {html_code(unban_user_id)} 信息失败"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
 
     try:
         if unban_user.type == ChatType.PRIVATE:
-            await msg.chat.restrict_member(
+            await bot.unban_chat_member(
+                message.chat.id,
                 unban_user.id,
-                ChatPermissions(
-                    can_send_messages=True,
-                    can_send_media_messages=True,
-                    can_send_other_messages=True,
-                    can_invite_users=True,
-                    can_add_web_page_previews=True,
-                ),
+                only_if_banned=True,
             )
             try:
-                await cli.send_message(
+                await bot.restrict_chat_member(
+                    message.chat.id,
+                    unban_user.id,
+                    permissions=full_chat_permissions(),
+                )
+            except Exception as e:
+                logger.exception(e)
+                logger.error("恢复用户权限失败, 以上为错误信息")
+            try:
+                await bot.send_message(
                     unban_user.id,
                     _t(
-                        f"{get_md_chat_link(msg.from_user)} 已在 {get_md_chat_link(msg.chat)} 中将你解除封禁"
+                        f"{get_md_chat_link(message.from_user)} 已在 {get_md_chat_link(message.chat)} 中将你解除封禁"
                     ),
                     reply_markup=Ikm(
-                        [[Ikb(_t("点击重新加入群组"), url=get_chat_link(msg.chat))]]
+                        inline_keyboard=[
+                            [
+                                Ikb(
+                                    text=_t("点击重新加入群组"),
+                                    url=get_chat_link(message.chat),
+                                )
+                            ]
+                        ]
                     ),
                     link_preview_options=LinkPreviewOptions(is_disabled=True),
                 )
@@ -65,19 +81,18 @@ async def unban(cli: Client, msg: Message):
                 logger.exception(e)
                 logger.error("通知用户 [解除封禁] 失败, 以上为错误信息")
         else:
-            await msg.chat.unban_member(unban_user.id)
+            await bot.unban_chat_sender_chat(message.chat.id, unban_user.id)
 
     except Exception as e:
         logger.exception(e)
         logger.error("放出用户失败, 以上为错误信息")
-        await msg.reply(
+        await message.reply(
             _t(f"放出 {get_md_chat_link(unban_user)} 失败"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
     else:
-        await msg.reply(
+        await message.reply(
             _t(f"已放出 {get_md_chat_link(unban_user)}"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        return

@@ -1,8 +1,11 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message, BotCommand, LinkPreviewOptions
+from aiogram import Bot, F, Router
+from aiogram.filters import Command, CommandStart
+from aiogram.types import BotCommand, LinkPreviewOptions, Message
 
 from i18n import t_
 from utils.filters import is_admin
+
+router = Router()
 
 COMMANDS = {
     "kick": t_("封禁用户并踢出群聊"),
@@ -13,25 +16,28 @@ COMMANDS = {
 }
 
 
-@Client.on_message(filters.command(["start", "help"]), group=1)
-async def start(_, msg: Message):
-    await msg.reply_text(
+@router.message(CommandStart(deep_link=False))
+@router.message(Command("help"))
+async def start(message: Message) -> None:
+    await message.answer(
         t_(
-            f"**呀哈喽!**\n\n"
-            f"命令列表:\n{cmd_list_text(msg)}\n\n"
-            "**项目地址:** [Github](https://github.com/z-mio/judgment-bot)"
-        )[msg],
+            f"<b>呀哈喽!</b>\n\n"
+            f"命令列表:\n{cmd_list_text(message)}\n\n"
+            '<b>项目地址:</b> <a href="https://github.com/z-mio/judgment-bot">Github</a>'
+        )[message],
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 
 
-@Client.on_message(filters.command("menu") & is_admin)
-async def set_menu(cli: Client, msg: Message):
-    await cli.set_bot_commands(
-        [BotCommand(command=k, description=v) for k, v in COMMANDS.items()]
+@router.message(
+    Command("menu"), F.chat.type.in_({"group", "supergroup", "private"}), is_admin
+)
+async def set_menu(message: Message, bot: Bot) -> None:
+    await bot.set_my_commands(
+        [BotCommand(command=k, description=v[message]) for k, v in COMMANDS.items()]
     )
-    await msg.reply("👌")
+    await message.answer("👌")
 
 
-def cmd_list_text(msg: Message):
-    return "\n".join([f"/{k} - {v[msg]}" for k, v in COMMANDS.items()])
+def cmd_list_text(message: Message) -> str:
+    return "\n".join([f"/{k} - {v[message]}" for k, v in COMMANDS.items()])

@@ -1,63 +1,76 @@
 import asyncio
 import hashlib
+from html import escape
 
-from pyrogram import Client
-from pyrogram.enums import ChatMemberStatus
+from aiogram import Bot
+from aiogram.enums import ChatMemberStatus
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import Chat, User
+from aiogram.utils.deep_linking import create_start_link
 
-from pyrogram.types import User, Chat
 
-
-def get_hash(text) -> str:
+def get_hash(text: object) -> str:
     return hashlib.md5(str(text).encode("utf-8")).hexdigest()
 
 
-def get_md_chat_link(user: User | Chat):
-    """获取 Markdown 格式的用户/聊天链接。"""
-    if hasattr(user, "username") and user.username:
-        return f"[{user.full_name}](https://t.me/{user.username})"
+def get_md_chat_link(user: User | Chat) -> str:
+    name_value = getattr(user, "full_name", None) or getattr(user, "title", None)
+    name = escape(name_value if isinstance(name_value, str) else str(user.id))
+    username = getattr(user, "username", None)
+    if isinstance(username, str) and username:
+        return f'<a href="https://t.me/{escape(username)}">{name}</a>'
 
     if isinstance(user, User):
-        return f"[{user.full_name}](tg://user?id={user.id})"
-    else:
-        # Pyrogram 的 chat.id 对于频道/超级群包含 -100 前缀，需要移除
-        chat_id = abs(user.id)
-        if str(chat_id).startswith("100"):
-            chat_id = int(str(chat_id)[3:])
-        return f"[{user.full_name}](https://t.me/c/{chat_id})"
+        return f'<a href="tg://user?id={user.id}">{name}</a>'
+
+    chat_id = abs(user.id)
+    if str(chat_id).startswith("100"):
+        chat_id = int(str(chat_id)[3:])
+    return f'<a href="https://t.me/c/{chat_id}">{name}</a>'
 
 
-def get_chat_link(chat: Chat):
-    """获取聊天链接。"""
+def html_code(value: object) -> str:
+    return f"<code>{escape(str(value))}</code>"
+
+
+def get_chat_link(chat: Chat) -> str:
     if chat.username:
         return f"https://t.me/{chat.username}"
-    elif chat.invite_link:
+    if chat.invite_link:
         return chat.invite_link
-    else:
-        # Pyrogram 的 chat.id 对于频道/超级群包含 -100 前缀，需要移除
-        chat_id = abs(chat.id)
-        if str(chat_id).startswith("100"):
-            chat_id = int(str(chat_id)[3:])
-        return f"https://t.me/c/{chat_id}"
+
+    chat_id = abs(chat.id)
+    if str(chat_id).startswith("100"):
+        chat_id = int(str(chat_id)[3:])
+    return f"https://t.me/c/{chat_id}"
 
 
-async def member_is_admin(cli: Client, cid: int, uid: int) -> bool:
+async def member_is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
     try:
-        member = await cli.get_chat_member(cid, uid)
+        member = await bot.get_chat_member(chat_id, user_id)
     except Exception:
         return False
 
-    if member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
-        return True
-    return False
+    return member.status in {
+        ChatMemberStatus.CREATOR,
+        ChatMemberStatus.ADMINISTRATOR,
+    }
 
 
-async def delete_messages(cli: Client, chat_id: int, message_ids: list[int]):
+async def delete_messages(
+    bot: Bot, chat_id: int, message_ids: list[int], delay: int = 5
+) -> None:
     try:
-        await asyncio.sleep(5)
-        await cli.delete_messages(chat_id, message_ids)
+        if delay:
+            await asyncio.sleep(delay)
+        for message_id in message_ids:
+            try:
+                await bot.delete_message(chat_id, message_id)
+            except TelegramBadRequest:
+                pass
     except Exception:
-        ...
+        pass
 
 
-def build_start_link(cli: Client, value):
-    return f"https://t.me/{cli.me.username}?start={value}"
+async def build_start_link(bot: Bot, value: object) -> str:
+    return await create_start_link(bot, str(value), encode=True)

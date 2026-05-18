@@ -1,8 +1,8 @@
 import abc
 import re
 
-from pyrogram import Client
-from pyrogram.types import Message, CallbackQuery
+from aiogram import Bot
+from aiogram.types import CallbackQuery, Message
 
 from utils.util import get_hash
 
@@ -18,14 +18,18 @@ class CQData:
         self.value = value
 
     @classmethod
-    def parse(cls, data: str):
-        provider = re.search(rf"{cls.prefix}(.*?){cls.suffix}", data)[1]
-        rid, operate, value = data.replace(
-            f"{cls.prefix}{provider}{cls.suffix}", ""
-        ).split(",")
+    def parse(cls, data: str) -> "CQData":
+        match = re.search(rf"{cls.prefix}(.*?){cls.suffix}", data or "")
+        if not match:
+            raise ValueError("invalid callback data")
+        provider = match[1]
+        parts = data.replace(f"{cls.prefix}{provider}{cls.suffix}", "").split(",")
+        if len(parts) != 3:
+            raise ValueError("invalid callback data")
+        rid, operate, value = parts
         return cls(provider, rid, operate, value)
 
-    def unparse(self):
+    def unparse(self) -> str:
         return f"{self.prefix}{self.validator_id}{self.suffix}{self.rid},{self.operate},{self.value}"
 
     def __repr__(self) -> str:
@@ -42,14 +46,17 @@ class StartData:
         self.value = value
 
     @classmethod
-    def parse(cls, data: str):
-        provider, rid, operate, value = data.split(cls.sep, 3)
+    def parse(cls, data: str) -> "StartData":
+        parts = (data or "").split(cls.sep, 3)
+        if len(parts) != 4:
+            raise ValueError("invalid start data")
+        provider, rid, operate, value = parts
         return cls(provider, rid, operate, value)
 
-    def unparse(self):
+    def unparse(self) -> str:
         return f"{self.validator_id}{self.sep}{self.rid}{self.sep}{self.operate}{self.sep}{self.value}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.unparse()
 
 
@@ -61,22 +68,25 @@ class BaseValidator(abc.ABC):
         self.user_id = user_id
 
     @abc.abstractmethod
-    async def init(self, *args, **kwargs): ...
+    async def init(self, bot: Bot) -> bool: ...
 
     @abc.abstractmethod
-    async def start(self, cli: Client): ...
+    async def start(self, bot: Bot) -> None: ...
 
     @abc.abstractmethod
-    async def progress(self, cli: Client, content: Message | CallbackQuery): ...
+    async def progress(
+        self, bot: Bot, content: Message | CallbackQuery, payload: str | None = None
+    ) -> None: ...
 
     @property
     def validator_id(self) -> str:
         return get_hash(f"{self.validator_name}_{self.chat_id}_{self.user_id}")[:8]
 
     @abc.abstractmethod
-    def dumps(self): ...
+    def dumps(self) -> str: ...
 
     @classmethod
+    @abc.abstractmethod
     def loads(cls, obj: str) -> "BaseValidator": ...
 
     @property

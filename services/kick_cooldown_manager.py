@@ -25,7 +25,7 @@ class KickCooldownManager:
         """清除用户kick冷却时间"""
         key = self._get_key(chat_id, user_id)
         result = await rc.delete(key)
-        return result > 0
+        return int(result) > 0
 
     async def get_remaining_time(self, chat_id: int, user_id: int) -> int:
         """获取剩余冷却时间（秒）"""
@@ -48,11 +48,11 @@ class KickCooldownManager:
 
         time_parts = []
         if hours > 0:
-            time_parts.append(f"`{hours}`h")
+            time_parts.append(f"<code>{hours}</code>h")
         if minutes > 0:
-            time_parts.append(f"`{minutes}`m")
+            time_parts.append(f"<code>{minutes}</code>m")
         if seconds > 0 or not time_parts:
-            time_parts.append(f"`{seconds}`s")
+            time_parts.append(f"<code>{seconds}</code>s")
 
         return "".join(time_parts)
 

@@ -1,59 +1,59 @@
 import asyncio
 
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.enums import ParseMode
 
-from pyrogram import Client
-from pyrogram.handlers import ConnectHandler, DisconnectHandler
-from core.config import bs, ws
-from core.watchdog import on_connect, on_disconnect
+from core.config import bs
 from log import logger, setup_logging
+from plugins import ban_channel, del_service_msg, kick, start, unban, verify
 from services.redis_client import check_redis_connection, rc
 from utils.aps import aps
 from utils.optimized_event_loop import setup_optimized_event_loop
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
 
-setup_logging(debug=bs.debug)
-setup_optimized_event_loop()
+def create_bot() -> Bot:
+    session = AiohttpSession(proxy=bs.bot_proxy)
+    return Bot(
+        token=bs.bot_token,
+        session=session,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
 
 
-async def init():
-    aps.start()
+def register_routers(dp: Dispatcher) -> None:
+    dp.include_router(verify.router)
+    dp.include_router(start.router)
+    dp.include_router(kick.router)
+    dp.include_router(unban.router)
+    dp.include_router(ban_channel.router)
+    dp.include_router(del_service_msg.router)
+
+
+async def main() -> None:
     if not await check_redis_connection():
-        exit(1)
+        raise SystemExit(1)
 
+    bot = create_bot()
+    await bot.delete_webhook(drop_pending_updates=True)
+    dp = Dispatcher()
+    register_routers(dp)
 
-class Bot(Client):
-    def __init__(self):
-        self.bs = bs
-
-        super().__init__(
-            self.bs.bot_session_name,
-            api_id=self.bs.api_id,
-            api_hash=self.bs.api_hash,
-            bot_token=self.bs.bot_token,
-            plugins=dict(root="plugins"),
-            proxy=self.bs.bot_proxy,
-            loop=loop,
-            workdir=self.bs.bot_workdir,
+    aps.start()
+    logger.success("Bot 开始运行...")
+    try:
+        await dp.start_polling(
+            bot, allowed_updates=dp.resolve_used_update_types(), skip_updates=True
         )
-
-    async def start(self, **kwargs):
-        self.init_watchdog()
-        logger.debug("DEBUG 已开启")
-        await init()
-        await super().start()
-
-    async def stop(self, *args):
-        ws.exit_flag = True
+    finally:
+        if aps.running:
+            aps.shutdown(wait=False)
         await rc.aclose()
-        await super().stop()
-
-    def init_watchdog(self):
-        self.add_handler(ConnectHandler(on_connect))
-        self.add_handler(DisconnectHandler(on_disconnect))
+        await bot.session.close()
 
 
 if __name__ == "__main__":
-    bot = Bot()
-    bot.run()
+    setup_logging(debug=bs.debug)
+    setup_optimized_event_loop()
+    asyncio.run(main())

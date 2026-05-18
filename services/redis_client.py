@@ -16,9 +16,11 @@ rc = Redis(
 )
 
 
-async def check_redis_connection():
+async def check_redis_connection() -> bool:
     try:
-        await rc.ping()
+        ping = rc.ping()
+        if hasattr(ping, "__await__"):
+            await ping
         logger.info(f"Redis 连接成功: {bs.redis_host}:{bs.redis_port}")
         return True
     except (ConnectionError, TimeoutError) as e:
@@ -26,3 +28,4 @@ async def check_redis_connection():
         return False
     except Exception as e:
         logger.exception(f"Redis 连接出现未知错误: {e}")
+        return False

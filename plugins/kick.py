@@ -1,113 +1,141 @@
-from datetime import datetime
-
-from pyrogram import Client, filters, enums
-from pyrogram.errors import UserNotParticipant
-from pyrogram.types import (
-    Message,
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import Command
+from aiogram.types import (
     CallbackQuery,
-    InlineKeyboardMarkup as Ikm,
     InlineKeyboardButton as Ikb,
+    InlineKeyboardMarkup as Ikm,
     LinkPreviewOptions,
+    Message,
 )
 
 from i18n import t_
 from log import logger
 from services.kick_cooldown_manager import kick_cooldown
-from utils.util import get_md_chat_link, member_is_admin, delete_messages
+from utils.util import delete_messages, get_md_chat_link, member_is_admin
+
+router = Router()
 
 
-@Client.on_message(filters.command("kick") & filters.group & filters.admin)
-async def kick(cli: Client, msg: Message):
-    _t = t_[msg]
+@router.message(Command("kick"), F.chat.type.in_({"group", "supergroup"}))
+async def kick(message: Message, bot: Bot) -> None:
+    _t = t_[message]
 
-    if not msg.reply_to_message:
-        m = await msg.reply(_t("请回复一条消息"))
-        await delete_messages(cli, msg.chat.id, [msg.id, m.id])
-    elif msg.reply_to_message.from_user.id == msg.from_user.id:
-        await msg.reply(_t("紫砂吗? 有意思"))
-    elif msg.reply_to_message.from_user.id == cli.me.id:
-        await msg.reply(_t("big胆!"))
-    elif msg.reply_to_message.sender_chat:
-        await msg.reply(_t("封禁频道请使用 /bc"))
-    else:
-        if await member_is_admin(cli, msg.chat.id, msg.from_user.id):
-            await admin_kick(cli, msg)
-        else:
-            await member_kick_button(cli, msg)
-
-
-@Client.on_callback_query(filters.regex(r"^member_kick"))
-async def member_kick_callback(cli: Client, cq: CallbackQuery):
-    _t = t_[cq.from_user]
-
-    a, u = cq.data.split(";")
-    action_user_id = int(u.split("=")[1])
-    if cq.from_user.id != action_user_id:
-        await cq.answer(_t("这不是你的操作"), show_alert=True)
+    if not message.from_user:
         return
 
-    action = a.split("=")[1]
-    if action == "confirm":
-        await member_kick(cli, cq.message)
-    elif action == "cancel":
-        await kick_cooldown.clear_cooldown(cq.message.chat.id, action_user_id)
-        await cq.message.edit(_t("已取消操作"))
-        await delete_messages(
-            cli, cq.message.chat.id, [cq.message.id, cq.message.reply_to_message.id]
-        )
-
-
-async def member_kick_button(_, msg: Message):
-    _t = t_[msg]
-
-    least_joined_days = 30
-    ad_joined_days = 30
-    try:
-        member = await msg.chat.get_member(msg.from_user.id)
-    except UserNotParticipant:
-        return await msg.reply(_t("非群组成员, 请先加入群组"))
-
-    try:
-        ad_member = await msg.chat.get_member(msg.reply_to_message.from_user.id)
-    except UserNotParticipant:
-        ...  # 从关联频道发送的广告, 不在群里
+    if not message.reply_to_message:
+        m = await message.reply(_t("请回复一条消息"))
+        await delete_messages(bot, message.chat.id, [message.message_id, m.message_id])
+    elif (
+        message.reply_to_message.from_user
+        and message.reply_to_message.from_user.id == message.from_user.id
+    ):
+        await message.reply(_t("紫砂吗? 有意思"))
+    elif (
+        message.reply_to_message.from_user
+        and message.reply_to_message.from_user.id == bot.id
+    ):
+        await message.reply(_t("big胆!"))
+    elif message.reply_to_message.sender_chat:
+        await message.reply(_t("封禁频道请使用 /bc"))
+    elif not message.reply_to_message.from_user:
+        await message.reply(_t("无法识别目标用户"))
     else:
-        if (ad_jd := joined_days(ad_member.joined_date)) > ad_joined_days:
-            return await msg.reply(
-                _t(
-                    f"{get_md_chat_link(ad_member.user)} 入群天数 `{ad_jd}` 天, 大于 `{ad_joined_days}` 天, 无法击落"
-                ),
-                link_preview_options=LinkPreviewOptions(is_disabled=True),
-            )
-    if (jd := joined_days(member.joined_date)) < least_joined_days:
-        return await msg.reply(
-            _t(
-                f"此功能需要入群天数大于 `{least_joined_days}` 天\n已入群天数: `{jd}` 天"
-            )
-        )
-    if await kick_cooldown.can_user_kick(msg.chat.id, msg.from_user.id):
-        await kick_cooldown.set_cooldown(msg.chat.id, msg.from_user.id)
-    else:
-        return await msg.reply(
-            _t(
-                f"**冷却中... | 剩余: {await kick_cooldown.get_remaining_time_formatted(msg.chat.id, msg.from_user.id)}**\n如有广告哥, 可喊其他群友帮忙砍一刀"
-            )
-        )
+        if await member_is_admin(bot, message.chat.id, message.from_user.id):
+            await admin_kick(message, bot)
+        else:
+            await member_kick_button(message, bot)
 
-    return await msg.reply(
+
+@router.callback_query(F.data.startswith("mk="))
+async def member_kick_callback(callback: CallbackQuery, bot: Bot) -> None:
+    _t = t_[callback.from_user]
+
+    if not isinstance(callback.message, Message) or not callback.data:
+        await callback.answer(_t("操作已失效"), show_alert=True)
+        return
+
+    try:
+        data = parse_member_kick_data(callback.data)
+        action_user_id = int(data["u"])
+        target_message_id = int(data["m"])
+        target_user_id = int(data["t"])
+        action = data["mk"]
+    except Exception:
+        await callback.answer(_t("操作已失效"), show_alert=True)
+        return
+    if callback.from_user.id != action_user_id:
+        await callback.answer(_t("这不是你的操作"), show_alert=True)
+        return
+
+    if action == "c":
+        await member_kick(
+            callback.message, bot, action_user_id, target_message_id, target_user_id
+        )
+    elif action == "x":
+        await kick_cooldown.clear_cooldown(callback.message.chat.id, action_user_id)
+        await callback.message.edit_text(_t("已取消操作"))
+        command_message_id = (
+            callback.message.reply_to_message.message_id
+            if callback.message.reply_to_message
+            else None
+        )
+        ids = [callback.message.message_id]
+        if command_message_id:
+            ids.append(command_message_id)
+        await delete_messages(bot, callback.message.chat.id, ids)
+
+
+def parse_member_kick_data(data: str) -> dict[str, str]:
+    return dict(part.split("=", 1) for part in data.split(";"))
+
+
+async def member_kick_button(message: Message, bot: Bot) -> None:
+    _t = t_[message]
+    from_user = message.from_user
+    if not from_user:
+        return
+
+    try:
+        await bot.get_chat_member(message.chat.id, from_user.id)
+    except TelegramBadRequest:
+        await message.reply(_t("非群组成员, 请先加入群组"))
+        return
+
+    if await kick_cooldown.can_user_kick(message.chat.id, from_user.id):
+        await kick_cooldown.set_cooldown(message.chat.id, from_user.id)
+    else:
+        remaining_time = await kick_cooldown.get_remaining_time_formatted(
+            message.chat.id, from_user.id
+        )
+        await message.reply(
+            _t(
+                f"<b>冷却中... | 剩余: {remaining_time}</b>\n如有广告哥, 可喊其他群友帮忙砍一刀"
+            )
+        )
+        return
+
+    target = message.reply_to_message
+    if not target or not target.from_user:
+        await message.reply(_t("无法识别目标用户"))
+        return
+    callback_base = f"u={from_user.id};m={target.message_id};t={target.from_user.id}"
+
+    await message.reply(
         _t(
-            f"**确定要击落 {get_md_chat_link(msg.reply_to_message.from_user)} 吗?**\n\n**本功能仅可用于击落广告哥, 切勿意气用事**"
+            f"<b>确定要击落 {get_md_chat_link(target.from_user)} 吗?</b>\n\n<b>本功能仅可用于击落广告哥, 切勿意气用事</b>"
         ),
         reply_markup=Ikm(
-            [
+            inline_keyboard=[
                 [
                     Ikb(
-                        _t("广告哥,击落!"),
-                        callback_data=f"member_kick=confirm;user={msg.from_user.id}",
+                        text=_t("广告哥,击落!"),
+                        callback_data=f"mk=c;{callback_base}",
                     ),
                     Ikb(
-                        _t("手滑了"),
-                        callback_data=f"member_kick=cancel;user={msg.from_user.id}",
+                        text=_t("手滑了"),
+                        callback_data=f"mk=x;{callback_base}",
                     ),
                 ]
             ]
@@ -116,46 +144,61 @@ async def member_kick_button(_, msg: Message):
     )
 
 
-async def member_kick(cli: Client, msg: Message):
-    rm = msg.reply_to_message  # 用户发送的指令消息
-    ad_msg = rm.reply_to_message  # 广告消息
-    _t = t_[rm]
-    if await member_is_admin(cli, ad_msg.chat.id, ad_msg.from_user.id):
-        await msg.edit(_t("造反吗? 有意思"))
-        await kick_cooldown.clear_cooldown(rm.chat.id, rm.from_user.id)
-        return
+async def member_kick(
+    message: Message,
+    bot: Bot,
+    action_user_id: int,
+    target_message_id: int,
+    target_user_id: int,
+) -> None:
+    command_message = message.reply_to_message
+    _t = t_[command_message or message]
 
     try:
-        await cli.ban_chat_member(ad_msg.chat.id, ad_msg.from_user.id)
+        if await member_is_admin(bot, message.chat.id, target_user_id):
+            await message.edit_text(_t("造反吗? 有意思"))
+            await kick_cooldown.clear_cooldown(message.chat.id, action_user_id)
+            return
+
+        target_user = await bot.get_chat_member(message.chat.id, target_user_id)
+        await bot.ban_chat_member(message.chat.id, target_user_id)
     except Exception as e:
         logger.exception(e)
         logger.error("击落失败, 以上为错误信息")
-        await msg.edit(_t("击落失败"))
-        await kick_cooldown.clear_cooldown(rm.chat.id, rm.from_user.id)
+        await message.edit_text(_t("击落失败"))
+        await kick_cooldown.clear_cooldown(message.chat.id, action_user_id)
     else:
-        await delete_member_messages(
-            cli, ad_msg.chat.id, ad_msg.from_user.id, ad_msg.id
+        command_message_id = command_message.message_id if command_message else None
+        ids = [target_message_id]
+        if command_message_id:
+            ids.append(command_message_id)
+
+        action_user_link = (
+            get_md_chat_link(command_message.from_user)
+            if command_message and command_message.from_user
+            else str(action_user_id)
         )
-        await msg.edit(
-            _t(
-                f"{get_md_chat_link(rm.from_user)} 已击落 {get_md_chat_link(ad_msg.from_user)}"
-            ),
+        target_user_link = get_md_chat_link(target_user.user)
+        await message.edit_text(
+            _t(f"{action_user_link} 已击落 {target_user_link}"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
+        await delete_messages(bot, message.chat.id, ids, delay=0)
+        if target_user.user.is_bot:
+            return
+
         admins = "\n".join(
             [
                 f"• {get_md_chat_link(member.user)}"
-                async for member in rm.chat.get_members(
-                    filter=enums.ChatMembersFilter.ADMINISTRATORS
-                )
+                for member in await bot.get_chat_administrators(message.chat.id)
                 if member.user.is_bot is False
             ]
         )
         try:
-            await cli.send_message(
-                ad_msg.from_user.id,
+            await bot.send_message(
+                target_user_id,
                 _t(
-                    f"**你已被 {get_md_chat_link(rm.from_user)} 踢出 {get_md_chat_link(rm.chat)}**\n如有异议请联系群组管理:\n"
+                    f"<b>你已被 {action_user_link} 踢出 {get_md_chat_link(message.chat)}</b>\n如有异议请联系群组管理:\n"
                     f"{admins}"
                 ),
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
@@ -165,51 +208,26 @@ async def member_kick(cli: Client, msg: Message):
             logger.error("通知用户失败, 以上为错误信息")
 
 
-async def admin_kick(cli: Client, msg: Message):
-    _t = t_[msg]
-    rm = msg.reply_to_message
-    if await member_is_admin(cli, msg.chat.id, rm.from_user.id):
-        m = await msg.reply_text(_t("禁止窝里斗"))
-        return await delete_messages(cli, msg.chat.id, [msg.id, m.id])
+async def admin_kick(message: Message, bot: Bot) -> None:
+    _t = t_[message]
+    rm = message.reply_to_message
+    if not rm or not rm.from_user:
+        return
+
+    if await member_is_admin(bot, message.chat.id, rm.from_user.id):
+        m = await message.reply(_t("禁止窝里斗"))
+        await delete_messages(bot, message.chat.id, [message.message_id, m.message_id])
+        return
 
     try:
-        await cli.ban_chat_member(rm.chat.id, rm.from_user.id)
+        await bot.ban_chat_member(rm.chat.id, rm.from_user.id)
     except Exception as e:
         logger.exception(e)
         logger.error("击落失败, 以上为错误信息")
-        await msg.reply_text(_t("击落失败"))
+        await message.reply(_t("击落失败"))
     else:
-        await delete_member_messages(cli, rm.chat.id, rm.from_user.id, rm.id)
-        m = await msg.reply_text(_t("已击落"))
-        await delete_messages(cli, msg.chat.id, [msg.id, m.id])
-
-
-async def delete_member_messages(
-    cli: Client, chat_id: int, user_id: int, msg_id: int, limit: int = 100
-):
-    """
-    删除最近 100 条消息
-    """
-    msgs = await cli.get_messages(
-        chat_id,
-        message_ids=list(
-            range(max(msg_id - (limit // 2), 1), msg_id + (limit // 2) + 1)
-        ),
-    )
-    dms = []
-    for m in msgs:
-        if m.empty:
-            continue
-        if m.from_user:
-            if m.from_user.id == user_id:
-                dms.append(m.id)
-    await cli.delete_messages(chat_id, dms)
-
-
-def joined_days(joined_date: datetime | None):
-    """获取入群天数"""
-    if not joined_date:
-        return 114514
-    now = datetime.now()
-    delta = now - joined_date
-    return delta.days
+        await delete_messages(
+            bot, rm.chat.id, [rm.message_id, message.message_id], delay=0
+        )
+        m = await message.answer(_t("已击落"))
+        await delete_messages(bot, message.chat.id, [m.message_id])

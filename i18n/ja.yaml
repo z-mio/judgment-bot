@@ -1,73 +1,71 @@
 0456b0ea596e: 紫砂ですか？面白い
 09d0c34b4b8a: 永久に追放されました
+0df0c619516e: '{html_code(unban_user_id)} 情報の取得に失敗しました'
 12d4dc030c47: クリックしてグループに再参加
-1f29c978ca6e: '**{get_md_chat_link(self.verify_msg.chat)} 認証通過**'
 1f386e2ea10f: 広告者、撃ち落とせ！
+25ba572dc45f: 操作は無効になりました
 30364e475d07: これはあなたの操作ではありません
 45fa2c695fa9: 撃墜済み
+4acf422b3218: '{get_md_chat_link(message.chat)} で {get_md_chat_link(message.from_user)}
+  があなたの禁止を解除しました'
 4b67f02a3434: 管理者 {get_md_chat_link(content.from_user)} によって手動で承認されました
-4ff7f8240f10: '**あなたは {get_md_chat_link(rm.from_user)} により {get_md_chat_link(rm.chat)}
-  からキックされました**
-
-  異議がある場合はグループ管理者に連絡してください:
-
-  {admins}'
 565fdf53859a: グループのメンバーではありません。先にグループに参加してください
 65535de6dc92: 管理者 {get_md_chat_link(content.from_user)} によって手動で撃墜されました
-6c2115ecc2ff: '**{get_md_chat_link(self.verify_msg.chat)} 認証失敗**
-
-  1分後に再試行してください'
 72abe5fa14d3: チャンネルのメッセージに返信してください
 7312144cbac5: 撃墜に失敗しました
-73949894c1db: '**クールダウン中... | 残り: {await kick_cooldown.get_remaining_time_formatted(msg.chat.id,
-  msg.from_user.id)}**
-
-  広告者がいる場合、他のメンバーに手伝ってもらって一撃入れてもらえます'
 79ce5132b61d: '{get_md_chat_link(unban_user)} を解放しました'
 7afedd2f48d2: グループに戻る
 7e04918e886e: 手が滑りました
 817610aa0087: チャンネルのメッセージに返信してください
-8a90287eabf8: '**本当に {get_md_chat_link(msg.reply_to_message.from_user)} を撃墜しますか？**
+81a96b923c7d: '<b>{get_md_chat_link(self.chat)} の認証に失敗しました</b>
 
-
-  **この機能は広告者を撃墜するためだけのものです。衝動的な行為は避けてください**'
+  1分後に再試行してください'
 92e3a830ae9a: ヘルプ
 95749343fed8: 反逆するの？面白い
+9d76dbba8218: '<b>やあ、こんにちは！</b>
+
+
+  コマンド一覧:
+
+  {cmd_list_text(message)}
+
+
+  <b>プロジェクトのURL:</b> <a href="https://github.com/z-mio/judgment-bot">Github</a>'
 a3e3b88377c8: 開始
+a74aa21b920e: <b>{get_md_chat_link(self.chat)} の認証に成功しました</b>
 b2b524821cc9: チャンネルを禁止するには /bc を使用してください
 bd8c756e7924: チャンネルの禁止に失敗しました
-c1ee73dfc92f: 'ユーザー名またはIDを追加してください
+c0521c2cda18: '<b>あなたは {get_md_chat_link(rm.chat)} から {get_md_chat_link(rm.from_user)}
+  によってキックされました</b>
 
-  例: `/unban @username`'
-c61f804a9958: '`{unban_user}` の情報取得に失敗しました'
+  異議がある場合はグループ管理者に連絡してください:
+
+  {admins}'
 c8d7362a00c1: 権限が不足しています
 c8ed40af510b: '{get_md_chat_link(unban_user)} の解放に失敗しました'
 cb88e1558d07: メッセージに返信してください
+ce124eab66c1: '<b>クールダウン中... | 残り: {await kick_cooldown.get_remaining_time_formatted(message.chat.id,
+  message.from_user.id)}</b>
+
+  広告主がいる場合は、他のグループメンバーに助けを求めてください'
 cf9737cb07bc: 認証の有効期限が切れました
 d1ca6194a363: 認証通過
 d20589eb36a2: 操作がキャンセルされました
 d34cff6e5250: チャンネル {get_md_chat_link(channel_msg.sender_chat)} を禁止しました
 d442dd9031b1: ユーザーを禁止してグループチャットから追放する
-d610cf50b6ff: '{get_md_chat_link(ad_member.user)} のグループ在籍日数 `{ad_jd}` 日は `{ad_joined_days}`
-  日より多いため、撃墜できません'
 d72fc56f7b40: ユーザー/チャンネルの解除
+db7d9a5c2b49: '<b>{get_md_chat_link(message.reply_to_message.from_user)} を撃墜してもよろしいですか？</b>
+
+
+  <b>この機能は広告主を撃墜するためだけに使用してください。感情的にならないでください</b>'
+dedcbc58ad83: 対象ユーザーを認識できません
 e0656adea3ae: これはあなたの認証ではありません
 e2c747f5ddc2: '{get_md_chat_link(rm.from_user)} は {get_md_chat_link(ad_msg.from_user)}
   を撃墜しました'
-ebdae8dbbed7: 'この機能はグループ在籍日数が `{least_joined_days}` 日より多いことが必要です
+eaac3c97a5e5: 'ユーザー名またはIDを追加してください
 
-  現在の在籍日数: `{jd}` 日'
-ebe0b0c73f82: '**ヤッハロー!**
-
-
-  コマンド一覧:
-
-  {cmd_list_text(msg)}
-
-
-  **プロジェクト:** [Github](https://github.com/z-mio/judgment-bot)'
+  例: <code>/unban @username</code>'
 ecfa64c174d3: 承認済み
 f1798b4fd5fc: チャンネルのサブアカウントを禁止
-f59f0e626cdb: '{get_md_chat_link(msg.from_user)} が {get_md_chat_link(msg.chat)} であなたの禁止を解除しました'
 f662ba5156a9: 大胆だ！
 f791f55eb70b: 内輪もめ禁止
