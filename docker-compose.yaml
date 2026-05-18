@@ -1,9 +1,8 @@
-version: '3.8'
+name: judgment-bot
 
 services:
   redis:
     image: redis:7-alpine
-    container_name: judgment-bot-redis
     command: >
       sh -c "
       if [ -n \"$$REDIS_PASSWORD\" ]; then
@@ -13,14 +12,14 @@ services:
       fi
       "
     volumes:
-      - judgment_bot_redis_data:/data
+      - redis_data:/data
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     restart: unless-stopped
     healthcheck:
       test: |
-        if [ -n "$REDIS_PASSWORD" ]; then
-          redis-cli -a "$REDIS_PASSWORD" ping
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          redis-cli -a "$$REDIS_PASSWORD" ping
         else
           redis-cli ping
         fi
@@ -33,7 +32,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: judgment-bot
     depends_on:
       redis:
         condition: service_healthy
@@ -44,10 +42,11 @@ services:
       - REDIS_PORT=6379
     volumes:
       - ./logs:/app/logs
+      - sessions:/app/sessions
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
 volumes:
-  judgment_bot_redis_data:
-    driver: local
+  redis_data:
+  sessions:
