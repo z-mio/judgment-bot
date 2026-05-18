@@ -1,22 +1,31 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS build
 
-# 安装 uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-COPY . /app
+COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /bin/
 
 WORKDIR /app
 
-ENV TZ=Asia/Shanghai
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-RUN apt-get update && apt-get install -y \
-    tzdata \
+COPY pyproject.toml uv.lock ./
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
- && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
- && echo "$TZ" > /etc/timezone \
  && rm -rf /var/lib/apt/lists/*
 
-RUN uv venv && uv sync --frozen
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-install-project --frozen
 
-CMD ["uv", "run", "bot.py"]
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen
+
+FROM python:3.12-slim AS runtime
+
+WORKDIR /app
+COPY --from=build /app /app
+
+ENV PATH="/app/.venv/bin:$PATH"
+
+CMD ["python", "bot.py"]

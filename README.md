@@ -26,8 +26,8 @@
 | `API_ID`         | 登录 https://my.telegram.org 获取 |             |
 | `API_HASH`       | 登录 https://my.telegram.org 获取 |             |
 | `BOT_TOKEN`      | 在 https://t.me/BotFather 获取   |             |
-| `ADMIN`          | 管理员用户ID，多个用户用逗号分隔             |             |
-| `PROXY`          | Bot 代理, 海外服务器不用填              |             |
+| `ADMINS`         | 管理员用户ID，多个用户用逗号分隔             |             |
+| `BOT_PROXY`      | Bot 代理, 海外服务器不用填              |             |
 | `REDIS_HOST`     | Redis 服务器地址                   | `localhost` |
 | `REDIS_PORT`     | Redis 服务器端口                   | `6379`      |
 | `REDIS_PASSWORD` | Redis 密码（如果有设置）               |             |

@@ -1,5 +1,6 @@
 import inspect
 import logging
+import sys
 from typing import TYPE_CHECKING
 
 import loguru
@@ -7,7 +8,31 @@ import loguru
 if TYPE_CHECKING:
     from loguru import Logger
 
-logger: "Logger" = loguru.logger
+logger: "Logger" = loguru.logger.bind(name="Main")
+
+logger_format = (
+    "<green>{time:HH:mm:ss}</green> | "
+    "<level>{level: <8}</level> | "
+    "<cyan>{name}:{function}:{line}</cyan> | "
+    "<level>[{extra[name]}] {message}</level>"
+)
+
+
+def setup_logging(debug: bool = False) -> None:
+    logger.remove()
+
+    level = "DEBUG" if debug else "INFO"
+    logger.add(sys.stderr, level=level, format=logger_format)
+    logger.add(
+        "logs/bot.log",
+        rotation="10 MB",
+        level="INFO",
+        format=logger_format,
+        enqueue=True,
+    )
+
+    if debug:
+        logger.debug("调试模式已启用")
 
 
 class InterceptHandler(logging.Handler):
@@ -19,7 +44,12 @@ class InterceptHandler(logging.Handler):
             level = record.levelno
 
         frame, depth = inspect.currentframe(), 0
-        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
+        while frame:
+            filename = frame.f_code.co_filename
+            is_logging = filename == logging.__file__
+            is_frozen = "importlib" in filename and "_bootstrap" in filename
+            if depth > 0 and not (is_logging or is_frozen):
+                break
             frame = frame.f_back
             depth += 1
 
@@ -28,8 +58,4 @@ class InterceptHandler(logging.Handler):
         )
 
 
-def init_logger():
-    logging.basicConfig(handlers=[InterceptHandler()], force=True)
-
-
-init_logger()
+logging.basicConfig(handlers=[InterceptHandler()], level="ERROR", force=True)

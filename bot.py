@@ -1,23 +1,20 @@
 import asyncio
-import sys
+
 
 from pyrogram import Client
-from config.config import cfg
-from log import logger
+from pyrogram.handlers import ConnectHandler, DisconnectHandler
+from core.config import bs, ws
+from core.watchdog import on_connect, on_disconnect
+from log import logger, setup_logging
 from services.redis_client import check_redis_connection, rc
 from utils.aps import aps
 from utils.optimized_event_loop import setup_optimized_event_loop
 
-logger.remove()
-setup_optimized_event_loop()
 loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
-if cfg.debug:
-    logger.add(sys.stderr, level="DEBUG")
-    logger.debug("Debug模式已启用")
-else:
-    logger.add("logs/bot.log", rotation="5 MB", level="INFO")
-    logger.add(sys.stderr, level="INFO")
+setup_logging(debug=bs.debug)
+setup_optimized_event_loop()
 
 
 async def init():
@@ -28,27 +25,33 @@ async def init():
 
 class Bot(Client):
     def __init__(self):
-        self.cfg = cfg
+        self.bs = bs
 
         super().__init__(
-            f"{self.cfg.bot_token.split(':')[0]}_bot",
-            api_id=self.cfg.api_id,
-            api_hash=self.cfg.api_hash,
-            bot_token=self.cfg.bot_token,
+            self.bs.bot_session_name,
+            api_id=self.bs.api_id,
+            api_hash=self.bs.api_hash,
+            bot_token=self.bs.bot_token,
             plugins=dict(root="plugins"),
-            proxy=self.cfg.proxy.dict_format,
+            proxy=self.bs.bot_proxy,
             loop=loop,
+            workdir=self.bs.bot_workdir,
         )
 
     async def start(self, **kwargs):
-        logger.info("Bot开始运行...")
+        self.init_watchdog()
         logger.debug("DEBUG 已开启")
         await init()
         await super().start()
 
     async def stop(self, *args):
+        ws.exit_flag = True
         await rc.aclose()
         await super().stop()
+
+    def init_watchdog(self):
+        self.add_handler(ConnectHandler(on_connect))
+        self.add_handler(DisconnectHandler(on_disconnect))
 
 
 if __name__ == "__main__":
