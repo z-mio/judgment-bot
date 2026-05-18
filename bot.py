@@ -37,7 +37,7 @@ class Bot(Client):
             bot_token=self.cfg.bot_token,
             plugins=dict(root="plugins"),
             proxy=self.cfg.proxy.dict_format,
-            loop=loop
+            loop=loop,
         )
 
     async def start(self, **kwargs):

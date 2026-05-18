@@ -13,4 +13,6 @@ dependencies = [
     "pyyaml>=6.0.2",
     "redis>=6.2.0",
     "tgcrypto>=1.2.5",
+    "uvloop>=0.22.1 ; sys_platform != 'win32'",
+    "winloop>=0.3.1 ; sys_platform == 'win32'",
 ]
