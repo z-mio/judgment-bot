@@ -1,5 +1,6 @@
 import abc
 import re
+import secrets
 
 from aiogram import Bot
 from aiogram.types import CallbackQuery, Message
@@ -63,9 +64,10 @@ class StartData:
 class BaseValidator(abc.ABC):
     validator_name: str = ""
 
-    def __init__(self, chat_id: int, user_id: int):
+    def __init__(self, chat_id: int, user_id: int, rid: str | None = None):
         self.chat_id = chat_id
         self.user_id = user_id
+        self._rid = rid or secrets.token_urlsafe(8)
 
     @abc.abstractmethod
     async def init(self, bot: Bot) -> bool: ...
@@ -91,4 +93,4 @@ class BaseValidator(abc.ABC):
 
     @property
     def rid(self) -> str:
-        return f"{self.chat_id}_{self.user_id}"
+        return self._rid

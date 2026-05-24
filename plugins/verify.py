@@ -36,9 +36,16 @@ async def verify_callback(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer(_t("验证已过期"), show_alert=True)
         return
 
-    click_user = await bot.get_chat_member(
-        callback.message.chat.id, callback.from_user.id
-    )
+    try:
+        click_user = await bot.get_chat_member(
+            callback.message.chat.id, callback.from_user.id
+        )
+    except Exception:
+        await callback.answer(_t("验证已过期"), show_alert=True)
+        return
+    if data.rid != v.rid:
+        await callback.answer(_t("验证已过期"), show_alert=True)
+        return
     if data.operate == "verify" and click_user.user.id != v.user_id:
         await callback.answer(_t("这不是你的验证"), show_alert=True)
         return
@@ -72,6 +79,9 @@ async def start_handler(message: Message, command: CommandObject, bot: Bot) -> N
         return
 
     click_user_id = message.from_user.id
+    if data.rid != v.rid:
+        await message.reply(_t("验证已过期"))
+        return
     if data.operate == "verify" and click_user_id != v.user_id:
         await message.reply(_t("这不是你的验证"))
         return

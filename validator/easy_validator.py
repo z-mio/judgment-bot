@@ -51,13 +51,14 @@ def chat_display_name(chat: Chat | None) -> str:
 class EasyValidator(BaseValidator):
     validator_name: str = "easy_validator"
 
-    def __init__(self, chat_id: int, user_id: int):
-        super().__init__(chat_id, user_id)
+    def __init__(self, chat_id: int, user_id: int, rid: str | None = None):
+        super().__init__(chat_id, user_id, rid)
 
         self.bot: Bot | None = None
         self.chat: Chat | None = None
         self.chat_member: Any | None = None
         self.verify_msg_id: int | None = None
+        self.state: str = self.STATE_CREATED
 
     @property
     def current_chat(self) -> Chat:
@@ -71,11 +72,79 @@ class EasyValidator(BaseValidator):
             raise RuntimeError("validator chat member is not initialized")
         return self.chat_member
 
+    STATE_CREATED = "created"
+    STATE_WAITING_CLICK = "waiting_click"
+    STATE_PASSED = "passed"
+    STATE_FAILED = "failed"
+    STATE_TIMEOUT = "timeout"
+
     @property
     def current_verify_msg_id(self) -> int:
         if self.verify_msg_id is None:
             raise RuntimeError("validator message is not initialized")
         return self.verify_msg_id
+
+    def job_id(self, name: str) -> str:
+        return f"{self.validator_id}|{self.rid}|{name}"
+
+    def legacy_rid(self) -> str:
+        return f"{self.chat_id}_{self.user_id}"
+
+    async def _load_session(self) -> dict[str, Any] | None:
+        raw = await rc.get(self.validator_id)
+        if not raw:
+            return None
+
+        data = cast(dict[str, Any], json.loads(raw))
+        data.setdefault("rid", self.legacy_rid())
+        data.setdefault("state", self.STATE_WAITING_CLICK)
+        if data["rid"] != self.rid:
+            return None
+        return data
+
+    async def is_current_waiting(self) -> bool:
+        data = await self._load_session()
+        return bool(data and data.get("state") == self.STATE_WAITING_CLICK)
+
+    async def try_finish(self, final_state: Literal["passed", "failed", "timeout"]) -> bool:
+        script = """
+        local raw = redis.call("GET", KEYS[1])
+        if not raw then
+            return 0
+        end
+
+        local obj = cjson.decode(raw)
+        local obj_rid = obj["rid"]
+        if obj_rid == nil then
+            obj_rid = ARGV[3]
+        end
+        local obj_state = obj["state"]
+        if obj_state == nil then
+            obj_state = ARGV[4]
+        end
+
+        if obj_rid ~= ARGV[1] or obj_state ~= ARGV[4] then
+            return 0
+        end
+
+        obj["state"] = ARGV[2]
+        redis.call("SET", KEYS[1], cjson.encode(obj))
+        return 1
+        """
+        try:
+            result = await rc.eval(
+                script,
+                1,
+                self.validator_id,
+                self.rid,
+                final_state,
+                self.legacy_rid(),
+                self.STATE_WAITING_CLICK,
+            )
+        except Exception as e:
+            logger.error(f"设置验证终态失败: {e}")
+            return False
+        return int(result) == 1
 
     async def init(self, bot: Bot) -> bool:
         self.bot = bot
@@ -93,19 +162,24 @@ class EasyValidator(BaseValidator):
                 "chat_id": self.chat_id,
                 "user_id": self.user_id,
                 "verify_msg_id": self.current_verify_msg_id,
+                "rid": self.rid,
+                "state": self.state,
             }
         )
 
     @classmethod
     def loads(cls, obj: str) -> "EasyValidator":
-        data = cast(dict[str, int | None], json.loads(obj))
+        data = cast(dict[str, Any], json.loads(obj))
         chat_id = data["chat_id"]
         user_id = data["user_id"]
         verify_msg_id = data["verify_msg_id"]
-        if chat_id is None or user_id is None:
+        rid = data["rid"]
+        state = data.get("state", cls.STATE_WAITING_CLICK)
+        if chat_id is None or user_id is None or verify_msg_id is None or rid is None:
             raise ValueError("invalid validator data")
-        v = cls(chat_id, user_id)
+        v = cls(chat_id, user_id, rid=rid)
         v.verify_msg_id = verify_msg_id
+        v.state = state
         return v
 
     async def start(self, bot: Bot) -> None:
@@ -130,44 +204,68 @@ class EasyValidator(BaseValidator):
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         self.verify_msg_id = verify_msg.message_id
+        self.state = self.STATE_WAITING_CLICK
+        await rc.set(self.validator_id, self.dumps())
         aps.add_job(
-            id=f"{self.validator_id}|refresh_verify_msg",
+            id=self.job_id("refresh_verify_msg"),
             func=self.refresh_verify_msg,
             args=(bot,),
             trigger="date",
+            replace_existing=True,
             run_date=datetime.now() + timedelta(seconds=random_number),
         )
-        await rc.set(self.validator_id, self.dumps())
 
     async def progress(
         self, bot: Bot, content: CallbackQuery | Message, payload: str | None = None
     ) -> None:
-        if isinstance(content, CallbackQuery):
-            if not content.data:
-                raise ValueError("callback data is empty")
-            cq_data = CQData.parse(content.data)
-            if cq_data.operate == "admin":
-                if cq_data.value == "pass":
-                    await self.admin_verify_pass(bot, content)
-                elif cq_data.value == "fail":
-                    await self.admin_verify_fail(bot, content)
-        elif isinstance(content, Message):
-            text = payload or content.text
-            if not text:
-                raise ValueError("start payload is empty")
-            start_data = StartData.parse(text.replace("/start ", ""))
-            if start_data.value == "pass":
-                await self.verify_pass(bot, content)
-            elif start_data.value == "fail":
-                await self.verify_fail(bot, content)
-
-        await self.verify_end()
+        finished = False
+        try:
+            if isinstance(content, CallbackQuery):
+                if not content.data:
+                    raise ValueError("callback data is empty")
+                cq_data = CQData.parse(content.data)
+                if cq_data.rid != self.rid:
+                    await content.answer("验证已过期", show_alert=True)
+                    return
+                if cq_data.operate == "admin":
+                    if cq_data.value == "pass":
+                        if not await self.try_finish(self.STATE_PASSED):
+                            await content.answer("验证已过期", show_alert=True)
+                            return
+                        finished = True
+                        await self.admin_verify_pass(bot, content)
+                    elif cq_data.value == "fail":
+                        if not await self.try_finish(self.STATE_FAILED):
+                            await content.answer("验证已过期", show_alert=True)
+                            return
+                        finished = True
+                        await self.admin_verify_fail(bot, content)
+            elif isinstance(content, Message):
+                text = payload or content.text
+                if not text:
+                    raise ValueError("start payload is empty")
+                start_data = StartData.parse(text.replace("/start ", ""))
+                if start_data.rid != self.rid:
+                    await content.reply("验证已过期")
+                    return
+                if start_data.value == "pass":
+                    if not await self.try_finish(self.STATE_PASSED):
+                        await content.reply("验证已过期")
+                        return
+                    finished = True
+                    await self.verify_pass(bot, content)
+                elif start_data.value == "fail":
+                    if not await self.try_finish(self.STATE_FAILED):
+                        await content.reply("验证已过期")
+                        return
+                    finished = True
+                    await self.verify_fail(bot, content)
+        finally:
+            if finished:
+                await self.verify_end()
 
     async def admin_verify_fail(self, bot: Bot, content: CallbackQuery) -> None:
         _t = t_[content.from_user]
-
-        if aps.get_job(f"{self.validator_id}|verify_timeout"):
-            aps.remove_job(f"{self.validator_id}|verify_timeout")
 
         await bot.ban_chat_member(self.chat_id, self.user_id)
         await content.answer(_t("已永久踢出"))
@@ -180,9 +278,6 @@ class EasyValidator(BaseValidator):
 
     async def admin_verify_pass(self, bot: Bot, content: CallbackQuery) -> None:
         _t = t_[content.from_user]
-
-        if aps.get_job(f"{self.validator_id}|verify_timeout"):
-            aps.remove_job(f"{self.validator_id}|verify_timeout")
 
         await bot.restrict_chat_member(
             self.chat_id,
@@ -199,9 +294,6 @@ class EasyValidator(BaseValidator):
 
     async def verify_pass(self, bot: Bot, content: Message) -> None:
         _t = t_[content]
-
-        if aps.get_job(f"{self.validator_id}|verify_timeout"):
-            aps.remove_job(f"{self.validator_id}|verify_timeout")
 
         await bot.restrict_chat_member(
             self.chat_id,
@@ -225,9 +317,6 @@ class EasyValidator(BaseValidator):
     async def verify_fail(self, bot: Bot, content: Message) -> None:
         _t = t_[content]
 
-        if aps.get_job(f"{self.validator_id}|refresh_verify_msg"):
-            aps.remove_job(f"{self.validator_id}|refresh_verify_msg")
-
         until_date = datetime.now() + timedelta(seconds=60)
         await bot.ban_chat_member(self.chat_id, self.user_id, until_date=until_date)
         await content.reply(
@@ -241,19 +330,21 @@ class EasyValidator(BaseValidator):
         )
 
     async def verify_timeout(self, bot: Bot) -> None:
-        if not await rc.exists(self.validator_id):
+        if not await self.try_finish(self.STATE_TIMEOUT):
             return
 
-        until_date = datetime.now() + timedelta(seconds=60)
-        await bot.ban_chat_member(self.chat_id, self.user_id, until_date=until_date)
-        await self.end_text(bot, "验证超时, 已击落")
-        await self.verify_end()
-        logger.debug(
-            f"验证超时: 已在 {chat_display_name(self.chat)} 中临时踢出60秒: {self.current_chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
-        )
+        try:
+            until_date = datetime.now() + timedelta(seconds=60)
+            await bot.ban_chat_member(self.chat_id, self.user_id, until_date=until_date)
+            await self.end_text(bot, "验证超时, 已击落")
+            logger.debug(
+                f"验证超时: 已在 {chat_display_name(self.chat)} 中临时踢出60秒: {self.current_chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
+            )
+        finally:
+            await self.verify_end()
 
     async def refresh_verify_msg(self, bot: Bot) -> None:
-        if not await rc.exists(self.validator_id):
+        if not await self.is_current_waiting():
             return
 
         cn_text = f"""证验行进 😀 击点内秒 <b>30</b> 在请 {get_md_chat_link(self.current_chat_member.user)}"""
@@ -270,11 +361,14 @@ class EasyValidator(BaseValidator):
         except TelegramBadRequest:
             await self.verify_end()
             return
+        if not await self.is_current_waiting():
+            return
         aps.add_job(
-            id=f"{self.validator_id}|verify_timeout",
+            id=self.job_id("verify_timeout"),
             func=self.verify_timeout,
             args=(bot,),
             trigger="date",
+            replace_existing=True,
             run_date=datetime.now() + timedelta(seconds=30),
         )
 
@@ -329,9 +423,16 @@ class EasyValidator(BaseValidator):
 
     async def verify_end(self) -> None:
         for job_id in (
-            f"{self.validator_id}|refresh_verify_msg",
-            f"{self.validator_id}|verify_timeout",
+            self.job_id("refresh_verify_msg"),
+            self.job_id("verify_timeout"),
         ):
             if aps.get_job(job_id):
                 aps.remove_job(job_id)
+
+        raw = await rc.get(self.validator_id)
+        if not raw:
+            return
+        data = cast(dict[str, Any], json.loads(raw))
+        if data.get("rid") != self.rid:
+            return
         await rc.delete(self.validator_id)
