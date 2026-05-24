@@ -106,7 +106,9 @@ class EasyValidator(BaseValidator):
         data = await self._load_session()
         return bool(data and data.get("state") == self.STATE_WAITING_CLICK)
 
-    async def try_finish(self, final_state: Literal["passed", "failed", "timeout"]) -> bool:
+    async def try_finish(
+        self, final_state: Literal["passed", "failed", "timeout"]
+    ) -> bool:
         script = """
         local raw = redis.call("GET", KEYS[1])
         if not raw then
