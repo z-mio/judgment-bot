@@ -241,6 +241,9 @@ class EasyValidator(BaseValidator):
         )
 
     async def verify_timeout(self, bot: Bot) -> None:
+        if not await rc.exists(self.validator_id):
+            return
+
         until_date = datetime.now() + timedelta(seconds=60)
         await bot.ban_chat_member(self.chat_id, self.user_id, until_date=until_date)
         await self.end_text(bot, "验证超时, 已击落")
@@ -250,6 +253,9 @@ class EasyValidator(BaseValidator):
         )
 
     async def refresh_verify_msg(self, bot: Bot) -> None:
+        if not await rc.exists(self.validator_id):
+            return
+
         cn_text = f"""证验行进 😀 击点内秒 <b>30</b> 在请 {get_md_chat_link(self.current_chat_member.user)}"""
         en_text = f"""{get_md_chat_link(self.current_chat_member.user)} Please complete verification by clicking 😀 within <b>30</b> seconds"""
         text = f"{cn_text}\n\n{en_text}"
@@ -322,4 +328,10 @@ class EasyValidator(BaseValidator):
             pass
 
     async def verify_end(self) -> None:
+        for job_id in (
+            f"{self.validator_id}|refresh_verify_msg",
+            f"{self.validator_id}|verify_timeout",
+        ):
+            if aps.get_job(job_id):
+                aps.remove_job(job_id)
         await rc.delete(self.validator_id)
