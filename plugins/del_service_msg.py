@@ -1,13 +1,12 @@
-from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message
-
-router = Router()
+from pyrogram import Client, filters
+from pyrogram.types import Message
 
 
-@router.message(F.left_chat_member | F.new_chat_members)
-async def delete_service_message(message: Message) -> None:
+@Client.on_message(
+    (filters.left_chat_member | filters.new_chat_members) & filters.admin
+)
+async def delete_service_message(_: Client, message: Message) -> None:
     try:
         await message.delete()
-    except TelegramBadRequest:
+    except Exception:
         pass

@@ -2,8 +2,8 @@ import abc
 import re
 import secrets
 
-from aiogram import Bot
-from aiogram.types import CallbackQuery, Message
+from pyrogram import Client
+from pyrogram.types import CallbackQuery, Message
 
 from utils.util import get_hash
 
@@ -70,14 +70,17 @@ class BaseValidator(abc.ABC):
         self._rid = rid or secrets.token_urlsafe(8)
 
     @abc.abstractmethod
-    async def init(self, bot: Bot) -> bool: ...
+    async def init(self, client: Client) -> bool: ...
 
     @abc.abstractmethod
-    async def start(self, bot: Bot) -> None: ...
+    async def start(self, client: Client) -> None: ...
 
     @abc.abstractmethod
     async def progress(
-        self, bot: Bot, content: Message | CallbackQuery, payload: str | None = None
+        self,
+        client: Client,
+        content: Message | CallbackQuery,
+        payload: str | None = None,
     ) -> None: ...
 
     @property

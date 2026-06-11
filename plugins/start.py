@@ -1,11 +1,8 @@
-from aiogram import Bot, F, Router
-from aiogram.filters import Command, CommandStart
-from aiogram.types import BotCommand, LinkPreviewOptions, Message
+from pyrogram import Client, filters
+from pyrogram.types import BotCommand, LinkPreviewOptions, Message
 
 from i18n import t_
 from utils.filters import is_admin
-
-router = Router()
 
 COMMANDS = {
     "kick": t_("封禁用户并踢出群聊"),
@@ -16,10 +13,14 @@ COMMANDS = {
 }
 
 
-@router.message(CommandStart(deep_link=False))
-@router.message(Command("help"))
-async def start(message: Message) -> None:
-    await message.answer(
+@Client.on_message(filters.command(["start", "help"]), group=1)
+async def start(_: Client, message: Message) -> None:
+    if message.text:
+        parts = message.text.split(maxsplit=1)
+        if parts and parts[0].split("@", 1)[0] == "/start" and len(parts) > 1:
+            return
+
+    await message.reply(
         t_(
             f"<b>呀哈喽!</b>\n\n"
             f"命令列表:\n{cmd_list_text(message)}\n\n"
@@ -29,14 +30,12 @@ async def start(message: Message) -> None:
     )
 
 
-@router.message(
-    Command("menu"), F.chat.type.in_({"group", "supergroup", "private"}), is_admin
-)
-async def set_menu(message: Message, bot: Bot) -> None:
-    await bot.set_my_commands(
-        [BotCommand(command=k, description=v[message]) for k, v in COMMANDS.items()]
+@Client.on_message(filters.command("menu") & is_admin)
+async def set_menu(client: Client, message: Message) -> None:
+    await client.set_bot_commands(
+        [BotCommand(k, v[message]) for k, v in COMMANDS.items()]
     )
-    await message.answer("👌")
+    await message.reply("👌")
 
 
 def cmd_list_text(message: Message) -> str:

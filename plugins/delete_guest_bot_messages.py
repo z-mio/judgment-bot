@@ -1,14 +1,22 @@
-from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message
+from typing import Any
+
+from pyrogram import Client, filters
+from pyrogram.types import Message
 
 
-router = Router()
+async def _guest_bot_message(_: Any, __: Any, message: Message) -> bool:
+    return bool(
+        getattr(message, "guest_bot_caller_chat", None)
+        or getattr(message, "guest_bot_caller_user", None)
+    )
 
 
-@router.message(F.guest_bot_caller_chat | F.guest_bot_caller_user)
-async def delete_guest_bot_message(message: Message) -> None:
+guest_bot_message = filters.create(_guest_bot_message)
+
+
+@Client.on_message(guest_bot_message & filters.admin)
+async def delete_guest_bot_message(_: Client, message: Message) -> None:
     try:
         await message.delete()
-    except TelegramBadRequest:
+    except Exception:
         pass

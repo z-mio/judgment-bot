@@ -5,9 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal, cast
 
-from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import (
+from pyrogram import Client
+from pyrogram.types import (
     CallbackQuery,
     Chat,
     ChatPermissions,
@@ -36,8 +35,10 @@ def full_chat_permissions() -> ChatPermissions:
         can_send_voice_notes=True,
         can_send_polls=True,
         can_send_other_messages=True,
-        can_invite_users=True,
         can_add_web_page_previews=True,
+        can_react_to_messages=True,
+        can_edit_tag=True,
+        can_invite_users=True,
     )
 
 
@@ -54,7 +55,7 @@ class EasyValidator(BaseValidator):
     def __init__(self, chat_id: int, user_id: int, rid: str | None = None):
         super().__init__(chat_id, user_id, rid)
 
-        self.bot: Bot | None = None
+        self.client: Client | None = None
         self.chat: Chat | None = None
         self.chat_member: Any | None = None
         self.verify_msg_id: int | None = None
@@ -134,7 +135,7 @@ class EasyValidator(BaseValidator):
         return 1
         """
         try:
-            result = await rc.eval(
+            result = await cast(Any, rc.eval)(
                 script,
                 1,
                 self.validator_id,
@@ -148,11 +149,11 @@ class EasyValidator(BaseValidator):
             return False
         return int(result) == 1
 
-    async def init(self, bot: Bot) -> bool:
-        self.bot = bot
-        self.chat = await bot.get_chat(self.chat_id)
+    async def init(self, client: Client) -> bool:
+        self.client = client
+        self.chat = await client.get_chat(self.chat_id)
         try:
-            self.chat_member = await bot.get_chat_member(self.chat_id, self.user_id)
+            self.chat_member = await client.get_chat_member(self.chat_id, self.user_id)
         except Exception as e:
             logger.error(f"获取群成员信息失败: {e}")
             return False
@@ -184,8 +185,8 @@ class EasyValidator(BaseValidator):
         v.state = state
         return v
 
-    async def start(self, bot: Bot) -> None:
-        await bot.restrict_chat_member(
+    async def start(self, client: Client) -> None:
+        await client.restrict_chat_member(
             self.chat_id, self.user_id, permissions=ChatPermissions()
         )
         random_number = random.randint(5, 10)
@@ -199,49 +200,61 @@ class EasyValidator(BaseValidator):
             f"<b>Do not click early!</b>"
         )
         text = f"{cn_text}\n\n{en_text}"
-        verify_msg = await bot.send_message(
+        verify_msg = await client.send_message(
             chat_id=self.chat_id,
             text=text,
-            reply_markup=await self.btn(bot, "one"),
+            reply_markup=await self.btn(client, "one"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        self.verify_msg_id = verify_msg.message_id
+        self.verify_msg_id = verify_msg.id
         self.state = self.STATE_WAITING_CLICK
         await rc.set(self.validator_id, self.dumps())
         aps.add_job(
             id=self.job_id("refresh_verify_msg"),
             func=self.refresh_verify_msg,
-            args=(bot,),
+            args=(client,),
             trigger="date",
             replace_existing=True,
             run_date=datetime.now() + timedelta(seconds=random_number),
         )
 
     async def progress(
-        self, bot: Bot, content: CallbackQuery | Message, payload: str | None = None
+        self,
+        client: Client,
+        content: CallbackQuery | Message,
+        payload: str | None = None,
     ) -> None:
         finished = False
         try:
             if isinstance(content, CallbackQuery):
                 if not content.data:
                     raise ValueError("callback data is empty")
-                cq_data = CQData.parse(content.data)
+                data_text = (
+                    content.data.decode()
+                    if isinstance(content.data, bytes)
+                    else content.data
+                )
+                cq_data = CQData.parse(data_text)
                 if cq_data.rid != self.rid:
                     await content.answer("验证已过期", show_alert=True)
                     return
                 if cq_data.operate == "admin":
                     if cq_data.value == "pass":
-                        if not await self.try_finish(self.STATE_PASSED):
+                        if not await self.try_finish(
+                            cast(Literal["passed"], self.STATE_PASSED)
+                        ):
                             await content.answer("验证已过期", show_alert=True)
                             return
                         finished = True
-                        await self.admin_verify_pass(bot, content)
+                        await self.admin_verify_pass(client, content)
                     elif cq_data.value == "fail":
-                        if not await self.try_finish(self.STATE_FAILED):
+                        if not await self.try_finish(
+                            cast(Literal["failed"], self.STATE_FAILED)
+                        ):
                             await content.answer("验证已过期", show_alert=True)
                             return
                         finished = True
-                        await self.admin_verify_fail(bot, content)
+                        await self.admin_verify_fail(client, content)
             elif isinstance(content, Message):
                 text = payload or content.text
                 if not text:
@@ -251,53 +264,57 @@ class EasyValidator(BaseValidator):
                     await content.reply("验证已过期")
                     return
                 if start_data.value == "pass":
-                    if not await self.try_finish(self.STATE_PASSED):
+                    if not await self.try_finish(
+                        cast(Literal["passed"], self.STATE_PASSED)
+                    ):
                         await content.reply("验证已过期")
                         return
                     finished = True
-                    await self.verify_pass(bot, content)
+                    await self.verify_pass(client, content)
                 elif start_data.value == "fail":
-                    if not await self.try_finish(self.STATE_FAILED):
+                    if not await self.try_finish(
+                        cast(Literal["failed"], self.STATE_FAILED)
+                    ):
                         await content.reply("验证已过期")
                         return
                     finished = True
-                    await self.verify_fail(bot, content)
+                    await self.verify_fail(client, content)
         finally:
             if finished:
                 await self.verify_end()
 
-    async def admin_verify_fail(self, bot: Bot, content: CallbackQuery) -> None:
+    async def admin_verify_fail(self, client: Client, content: CallbackQuery) -> None:
         _t = t_[content.from_user]
 
-        await bot.ban_chat_member(self.chat_id, self.user_id)
+        await client.ban_chat_member(self.chat_id, self.user_id)
         await content.answer(_t("已永久踢出"))
         await self.end_text(
-            bot, _t(f"由管理 {get_md_chat_link(content.from_user)} 手动击落")
+            client, _t(f"由管理 {get_md_chat_link(content.from_user)} 手动击落")
         )
         logger.debug(
             f"验证失败(管理手动踢出): 已在 {chat_display_name(self.chat)} 中踢出: {self.current_chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
-    async def admin_verify_pass(self, bot: Bot, content: CallbackQuery) -> None:
+    async def admin_verify_pass(self, client: Client, content: CallbackQuery) -> None:
         _t = t_[content.from_user]
 
-        await bot.restrict_chat_member(
+        await client.restrict_chat_member(
             self.chat_id,
             self.user_id,
             permissions=full_chat_permissions(),
         )
         await content.answer(_t("已通过"))
         await self.end_text(
-            bot, _t(f"由管理 {get_md_chat_link(content.from_user)} 手动通过")
+            client, _t(f"由管理 {get_md_chat_link(content.from_user)} 手动通过")
         )
         logger.debug(
             f"验证通过: 已在 {chat_display_name(self.chat)} 中通过验证: {self.current_chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
-    async def verify_pass(self, bot: Bot, content: Message) -> None:
+    async def verify_pass(self, client: Client, content: Message) -> None:
         _t = t_[content]
 
-        await bot.restrict_chat_member(
+        await client.restrict_chat_member(
             self.chat_id,
             self.user_id,
             permissions=full_chat_permissions(),
@@ -305,47 +322,47 @@ class EasyValidator(BaseValidator):
         await content.reply(
             _t(f"<b>{get_md_chat_link(self.current_chat)} 验证通过</b>"),
             reply_markup=Ikm(
-                inline_keyboard=[
-                    [Ikb(text=_t("返回群组"), url=get_chat_link(self.current_chat))]
-                ]
+                [[Ikb(text=_t("返回群组"), url=get_chat_link(self.current_chat))]]
             ),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        await self.end_text(bot, _t("验证通过"))
+        await self.end_text(client, _t("验证通过"))
         logger.debug(
             f"验证通过: 已在 {chat_display_name(self.chat)} 中通过验证: {self.current_chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
-    async def verify_fail(self, bot: Bot, content: Message) -> None:
+    async def verify_fail(self, client: Client, content: Message) -> None:
         _t = t_[content]
 
         until_date = datetime.now() + timedelta(seconds=60)
-        await bot.ban_chat_member(self.chat_id, self.user_id, until_date=until_date)
+        await client.ban_chat_member(self.chat_id, self.user_id, until_date=until_date)
         await content.reply(
             _t(
                 f"<b>{get_md_chat_link(self.current_chat)} 验证失败</b>\n请 1 分钟后重试"
             ),
         )
-        await self.end_text(bot, "验证未通过, 已击落")
+        await self.end_text(client, "验证未通过, 已击落")
         logger.debug(
             f"验证失败: 已在 {chat_display_name(self.chat)} 中踢出: {self.current_chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
         )
 
-    async def verify_timeout(self, bot: Bot) -> None:
-        if not await self.try_finish(self.STATE_TIMEOUT):
+    async def verify_timeout(self, client: Client) -> None:
+        if not await self.try_finish(cast(Literal["timeout"], self.STATE_TIMEOUT)):
             return
 
         try:
             until_date = datetime.now() + timedelta(seconds=60)
-            await bot.ban_chat_member(self.chat_id, self.user_id, until_date=until_date)
-            await self.end_text(bot, "验证超时, 已击落")
+            await client.ban_chat_member(
+                self.chat_id, self.user_id, until_date=until_date
+            )
+            await self.end_text(client, "验证超时, 已击落")
             logger.debug(
                 f"验证超时: 已在 {chat_display_name(self.chat)} 中临时踢出60秒: {self.current_chat_member.user.full_name} | {self.user_id} | {self.chat_id}"
             )
         finally:
             await self.verify_end()
 
-    async def refresh_verify_msg(self, bot: Bot) -> None:
+    async def refresh_verify_msg(self, client: Client) -> None:
         if not await self.is_current_waiting():
             return
 
@@ -353,14 +370,14 @@ class EasyValidator(BaseValidator):
         en_text = f"""{get_md_chat_link(self.current_chat_member.user)} Please complete verification by clicking 😀 within <b>30</b> seconds"""
         text = f"{cn_text}\n\n{en_text}"
         try:
-            await bot.edit_message_text(
+            await client.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.current_verify_msg_id,
                 text=text,
-                reply_markup=await self.btn(bot, "two"),
+                reply_markup=await self.btn(client, "two"),
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
-        except TelegramBadRequest:
+        except Exception:
             await self.verify_end()
             return
         if not await self.is_current_waiting():
@@ -368,13 +385,13 @@ class EasyValidator(BaseValidator):
         aps.add_job(
             id=self.job_id("verify_timeout"),
             func=self.verify_timeout,
-            args=(bot,),
+            args=(client,),
             trigger="date",
             replace_existing=True,
             run_date=datetime.now() + timedelta(seconds=30),
         )
 
-    async def btn(self, bot: Bot, step: Literal["one", "two"]) -> Ikm:
+    async def btn(self, client: Client, step: Literal["one", "two"]) -> Ikm:
         button = [
             Ikb(
                 text="✅",
@@ -387,7 +404,7 @@ class EasyValidator(BaseValidator):
                     Ikb(
                         text="🥵",
                         url=await build_start_link(
-                            bot,
+                            client,
                             StartData(self.validator_id, self.rid, "verify", "fail"),
                         ),
                     )
@@ -397,7 +414,7 @@ class EasyValidator(BaseValidator):
                     Ikb(
                         text="😀",
                         url=await build_start_link(
-                            bot,
+                            client,
                             StartData(self.validator_id, self.rid, "verify", "pass"),
                         ),
                     )
@@ -408,19 +425,19 @@ class EasyValidator(BaseValidator):
                 callback_data=str(CQData(self.validator_id, self.rid, "admin", "fail")),
             )
         )
-        return Ikm(inline_keyboard=[button])
+        return Ikm([button])
 
-    async def end_text(self, bot: Bot, text: str) -> None:
+    async def end_text(self, client: Client, text: str) -> None:
         try:
-            await bot.edit_message_text(
+            await client.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.current_verify_msg_id,
                 text=f"{get_md_chat_link(self.current_chat_member.user)} {text}",
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
             await asyncio.sleep(3)
-            await bot.delete_message(self.chat_id, self.current_verify_msg_id)
-        except TelegramBadRequest:
+            await client.delete_messages(self.chat_id, self.current_verify_msg_id)
+        except Exception:
             pass
 
     async def verify_end(self) -> None:

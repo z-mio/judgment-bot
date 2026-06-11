@@ -5,16 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "aiogram>=3.28.2,<4.0.0",
-    "aiohttp-socks>=0.11.0",
     "apscheduler>=3.11.0",
     "easy-ai18n>=1.1.2",
+    "kurigram>=2.2.3",
     "loguru>=0.7.3",
     "pydantic>=2.12.3",
     "pydantic-settings>=2.11.0",
     "python-dotenv>=1.1.0",
     "pyyaml>=6.0.2",
     "redis>=6.2.0",
+    "tgcrypto>=1.2.5",
     "uvloop>=0.22.1 ; sys_platform != 'win32'",
     "winloop>=0.3.1 ; sys_platform == 'win32'",
 ]

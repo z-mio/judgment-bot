@@ -1,12 +1,11 @@
 import asyncio
+import base64
 import hashlib
 from html import escape
 
-from aiogram import Bot
-from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Chat, User
-from aiogram.utils.deep_linking import create_start_link
+from pyrogram import Client
+from pyrogram.enums import ChatMemberStatus
+from pyrogram.types import Chat, User
 
 
 def get_hash(text: object) -> str:
@@ -23,7 +22,7 @@ def get_md_chat_link(user: User | Chat) -> str:
     if isinstance(user, User):
         return f'<a href="tg://user?id={user.id}">{name}</a>'
 
-    chat_id = abs(user.id)
+    chat_id = abs(user.id or 0)
     if str(chat_id).startswith("100"):
         chat_id = int(str(chat_id)[3:])
     return f'<a href="https://t.me/c/{chat_id}">{name}</a>'
@@ -39,26 +38,26 @@ def get_chat_link(chat: Chat) -> str:
     if chat.invite_link:
         return chat.invite_link
 
-    chat_id = abs(chat.id)
+    chat_id = abs(chat.id or 0)
     if str(chat_id).startswith("100"):
         chat_id = int(str(chat_id)[3:])
     return f"https://t.me/c/{chat_id}"
 
 
-async def member_is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
+async def member_is_admin(client: Client, chat_id: int, user_id: int) -> bool:
     try:
-        member = await bot.get_chat_member(chat_id, user_id)
+        member = await client.get_chat_member(chat_id, user_id)
     except Exception:
         return False
 
     return member.status in {
-        ChatMemberStatus.CREATOR,
+        ChatMemberStatus.OWNER,
         ChatMemberStatus.ADMINISTRATOR,
     }
 
 
 async def delete_messages(
-    bot: Bot, chat_id: int, message_ids: list[int], delay: int = 5
+    client: Client, chat_id: int, message_ids: list[int], delay: int = 5
 ) -> None:
     try:
         if delay:
@@ -69,16 +68,23 @@ async def delete_messages(
             if not chunk:
                 continue
             try:
-                await bot.delete_messages(chat_id, chunk)
-            except TelegramBadRequest:
+                await client.delete_messages(chat_id, chunk)
+            except Exception:
                 for message_id in chunk:
                     try:
-                        await bot.delete_message(chat_id, message_id)
-                    except TelegramBadRequest:
+                        await client.delete_messages(chat_id, message_id)
+                    except Exception:
                         pass
     except Exception:
         pass
 
 
-async def build_start_link(bot: Bot, value: object) -> str:
-    return await create_start_link(bot, str(value), encode=True)
+def decode_start_payload(value: str) -> str:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(f"{value}{padding}").decode()
+
+
+async def build_start_link(client: Client, value: object) -> str:
+    username = client.me.username if client.me else ""
+    payload = base64.urlsafe_b64encode(str(value).encode()).decode().rstrip("=")
+    return f"https://t.me/{username}?start={payload}"

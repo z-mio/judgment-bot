@@ -1,6 +1,6 @@
 from typing import Any
 
-from aiogram.types import Message, User
+from pyrogram.types import Message, User
 from easy_ai18n import EasyAI18n
 from easy_ai18n.core.i18n import PostLocaleSelector
 from easy_ai18n.translator import OpenAIBulkTranslator

@@ -67,6 +67,8 @@ cp .env.example .env
 
 | 名称 | 描述 | 默认值 |
 | --- | --- | --- |
+| `API_ID` | Telegram API ID, 可在 my.telegram.org 获取 | 必填 |
+| `API_HASH` | Telegram API Hash, 可在 my.telegram.org 获取 | 必填 |
 | `BOT_TOKEN` | 在 BotFather 获取的 Bot Token | 必填 |
 | `ADMINS` | 管理员用户 ID, 多个用户用英文逗号分隔 | 空 |
 | `BOT_PROXY` | Bot 代理地址, 海外服务器通常不需要填写 | 空 |
