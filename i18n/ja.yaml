@@ -1,0 +1,73 @@
+0456b0ea596e: 紫砂ですか？面白いですね
+073b76c22754: '{get_md_chat_link(target_member.user)} 入群日数 <code>{target_days}</code>
+  日、<code>{target_joined_days}</code> 日より多いため、撃墜できません'
+09d0c34b4b8a: 永久に追放されました
+0df0c619516e: '{html_code(unban_user_id)} の情報取得に失敗しました'
+12d4dc030c47: クリックしてグループに再参加してください
+14fc75907893: '<b>{get_md_chat_link(target.from_user)} を撃墜してもよろしいですか？</b>
+
+
+  <b>この機能は広告者を撃墜するためだけに使用してください。感情的にならないでください。</b>'
+1f386e2ea10f: 広告者、撃墜！
+2087a3e7999d: <b>{get_md_chat_link(self.current_chat)} の認証に成功しました</b>
+25ba572dc45f: 操作は無効になりました
+30364e475d07: これはあなたの操作ではありません
+3a02390fdd7d: 'この機能を使うには入群日数が <code>{least_joined_days}</code> 日より多く必要です
+
+  現在の入群日数: <code>{action_days}</code> 日'
+3ff037b807ca: '<b>あなたは {action_user_link} によって {get_md_chat_link(message.chat)} から追放されました</b>
+
+  異議がある場合はグループ管理者に連絡してください:
+
+  {admins}'
+45fa2c695fa9: 撃墜されました
+4b67f02a3434: 管理者 {get_md_chat_link(content.from_user)} によって手動で承認されました
+565fdf53859a: グループのメンバーではありません。まずグループに参加してください
+65535de6dc92: 管理者 {get_md_chat_link(content.from_user)} によって手動で撃墜されました
+72abe5fa14d3: チャンネルのメッセージに返信してください
+7312144cbac5: 撃墜に失敗しました
+79ce5132b61d: '{get_md_chat_link(unban_user)} を解放しました'
+7afedd2f48d2: グループに戻る
+7e04918e886e: 手が滑りました
+817610aa0087: チャンネルのメッセージに返信してください
+824bb3a81739: '<b>{get_md_chat_link(self.current_chat)} の認証に失敗しました</b>
+
+  1分後に再試行してください'
+92e3a830ae9a: ヘルプ
+95749343fed8: 反乱ですか？面白いですね
+9d76dbba8218: '<b>やあ、こんにちは！</b>
+
+
+  コマンド一覧:
+
+  {cmd_list_text(message)}
+
+
+  <b>プロジェクトのURL:</b> <a href="https://github.com/z-mio/judgment-bot">Github</a>'
+a3e3b88377c8: 開始
+ae9543316818: '<b>クールダウン中... | 残り: {remaining_time}</b>
+
+  広告者がいる場合は、他のグループメンバーに助けを求めてください'
+b2b524821cc9: チャンネルの禁止は /bc を使用してください
+bd8c756e7924: チャンネルの禁止に失敗しました
+c8d7362a00c1: 権限が不足しています
+c8ed40af510b: '{get_md_chat_link(unban_user)} の解放に失敗しました'
+cb88e1558d07: メッセージに返信してください
+cd8055c06856: '{action_user_link} は {target_user_link} を撃墜しました'
+cd9971e03f4c: '{get_md_chat_link(message.from_user)} は {get_md_chat_link(current_chat)}
+  であなたの禁止を解除しました'
+cf9737cb07bc: 認証の有効期限が切れました
+d1ca6194a363: 認証に成功しました
+d20589eb36a2: 操作がキャンセルされました
+d34cff6e5250: チャンネル {get_md_chat_link(channel_msg.sender_chat)} を禁止しました
+d442dd9031b1: ユーザーを禁止し、グループから追放しました
+d72fc56f7b40: ユーザー/チャンネルの禁止を解除しました
+dedcbc58ad83: 対象ユーザーを認識できません
+e0656adea3ae: これはあなたの認証ではありません
+eaac3c97a5e5: 'ユーザー名またはIDを付けてください
+
+  例: <code>/unban @username</code>'
+ecfa64c174d3: 承認されました
+f1798b4fd5fc: チャンネルの禁止用のサブアカウント
+f662ba5156a9: 大胆ですね！
+f791f55eb70b: 内部抗争は禁止です

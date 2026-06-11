@@ -1,0 +1,74 @@
+0456b0ea596e: Purple clay? Interesting
+073b76c22754: '{get_md_chat_link(target_member.user)} has been in the group for <code>{target_days}</code>
+  days, which is more than <code>{target_joined_days}</code> days, cannot be shot
+  down'
+09d0c34b4b8a: Permanently kicked out
+0df0c619516e: Failed to get {html_code(unban_user_id)} information
+12d4dc030c47: Click to rejoin the group
+14fc75907893: '<b>Are you sure you want to shoot down {get_md_chat_link(target.from_user)}?</b>
+
+
+  <b>This feature is only for shooting down advertisers; do not act on impulse</b>'
+1f386e2ea10f: Advertiser, shoot down!
+2087a3e7999d: <b>{get_md_chat_link(self.current_chat)} verification passed</b>
+25ba572dc45f: Operation has expired
+30364e475d07: This is not your operation
+3a02390fdd7d: 'This feature requires being in the group for more than <code>{least_joined_days}</code>
+  days
+
+  Days already in group: <code>{action_days}</code> days'
+3ff037b807ca: '<b>You have been kicked out of {action_user_link} by {get_md_chat_link(message.chat)}</b>
+
+  If you have any objections, please contact the group admins:
+
+  {admins}'
+45fa2c695fa9: Shot down
+4b67f02a3434: Manually approved by admin {get_md_chat_link(content.from_user)}
+565fdf53859a: Not a group member, please join the group first
+65535de6dc92: Manually shot down by admin {get_md_chat_link(content.from_user)}
+72abe5fa14d3: Please reply to a channel message
+7312144cbac5: Shot down failed
+79ce5132b61d: Released {get_md_chat_link(unban_user)}
+7afedd2f48d2: Back to group
+7e04918e886e: Oops
+817610aa0087: Please reply to a channel message
+824bb3a81739: '<b>{get_md_chat_link(self.current_chat)} verification failed</b>
+
+  Please try again after 1 minute'
+92e3a830ae9a: Help
+95749343fed8: Rebellion? Interesting
+9d76dbba8218: '<b>Yahallo!</b>
+
+
+  Command list:
+
+  {cmd_list_text(message)}
+
+
+  <b>Project address:</b> <a href="https://github.com/z-mio/judgment-bot">Github</a>'
+a3e3b88377c8: Start
+ae9543316818: '<b>Cooling down... | Remaining: {remaining_time}</b>
+
+  If there is an advertiser, you can ask other group members to help take a shot'
+b2b524821cc9: For banning a channel, please use /bc
+bd8c756e7924: Failed to ban channel
+c8d7362a00c1: Insufficient permissions
+c8ed40af510b: Failed to release {get_md_chat_link(unban_user)}
+cb88e1558d07: Please reply to a message
+cd8055c06856: '{action_user_link} has shot down {target_user_link}'
+cd9971e03f4c: '{get_md_chat_link(message.from_user)} has unbanned you in {get_md_chat_link(current_chat)}'
+cf9737cb07bc: Verification expired
+d1ca6194a363: Verification passed
+d20589eb36a2: Operation cancelled
+d34cff6e5250: Channel {get_md_chat_link(channel_msg.sender_chat)} has been banned
+d442dd9031b1: Ban user and kick from group chat
+d72fc56f7b40: Unban user/channel
+dedcbc58ad83: Unable to recognize target user
+e0656adea3ae: This is not your verification
+eaac3c97a5e5: 'Please add a username or id
+
+  Example: <code>/unban @username</code>'
+ecfa64c174d3: Passed
+f1798b4fd5fc: Ban channel alt account
+f662ba5156a9: Big胆!
+f791f55eb70b: No infighting
