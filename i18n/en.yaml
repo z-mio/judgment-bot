@@ -52,6 +52,8 @@ ae9543316818: '<b>Cooling down... | Remaining: {remaining_time}</b>
   If there is an advertiser, you can ask other group members to help take a shot'
 b2b524821cc9: For banning a channel, please use /bc
 bd8c756e7924: Failed to ban channel
+c1683031e76a: '{action_user_link} has deleted the advertisement message, but failed
+  to shoot down {target_user_link}'
 c8d7362a00c1: Insufficient permissions
 c8ed40af510b: Failed to release {get_md_chat_link(unban_user)}
 cb88e1558d07: Please reply to a message

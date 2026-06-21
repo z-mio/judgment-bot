@@ -211,61 +211,77 @@ async def member_kick(
         return
     chat_id = int(message.chat.id)
 
-    try:
-        if await member_is_admin(client, chat_id, target_user_id):
-            await message.edit_text(_t("造反吗? 有意思"))
-            await kick_cooldown.clear_cooldown(chat_id, action_user_id)
-            return
+    if await member_is_admin(client, chat_id, target_user_id):
+        await message.edit_text(_t("造反吗? 有意思"))
+        await kick_cooldown.clear_cooldown(chat_id, action_user_id)
+        return
 
+    target_user = None
+    try:
         target_user = await client.get_chat_member(chat_id, target_user_id)
-        await client.ban_chat_member(chat_id, target_user_id)
     except Exception as e:
         logger.exception(e)
-        logger.error("击落失败, 以上为错误信息")
-        await message.edit_text(_t("击落失败"))
-        await kick_cooldown.clear_cooldown(chat_id, action_user_id)
-    else:
-        command_message_id = command_message.id if command_message else None
-        ids = await get_recent_message_ids_by_user(chat_id, target_user_id)
-        ids.append(target_message_id)
-        if command_message_id:
-            ids.append(command_message_id)
+        logger.warning("获取被击落用户信息失败, 将继续执行 ban 和删除消息")
 
-        action_user_link = (
-            get_md_chat_link(command_message.from_user)
-            if command_message and command_message.from_user
-            else str(action_user_id)
-        )
-        target_user_link = get_md_chat_link(target_user.user)
+    ban_success = False
+    try:
+        await client.ban_chat_member(chat_id, target_user_id)
+        ban_success = True
+    except Exception as e:
+        logger.exception(e)
+        logger.error("击落用户失败, 将继续删除广告消息")
+
+    command_message_id = command_message.id if command_message else None
+    ids = await get_recent_message_ids_by_user(chat_id, target_user_id)
+    ids.append(target_message_id)
+    if command_message_id:
+        ids.append(command_message_id)
+
+    action_user_link = (
+        get_md_chat_link(command_message.from_user)
+        if command_message and command_message.from_user
+        else str(action_user_id)
+    )
+    target_user_link = (
+        get_md_chat_link(target_user.user) if target_user else str(target_user_id)
+    )
+    if ban_success:
         await message.edit_text(
             _t(f"{action_user_link} 已击落 {target_user_link}"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        await delete_messages(client, chat_id, ids, delay=0)
-        if target_user.user.is_bot:
-            return
-
-        admins = "\n".join(
-            [
-                f"• {get_md_chat_link(member.user)}"
-                async for member in message.chat.get_members(
-                    filter=enums.ChatMembersFilter.ADMINISTRATORS
-                )
-                if member.user.is_bot is False
-            ]
+    else:
+        await message.edit_text(
+            _t(f"{action_user_link} 已删除广告消息, 但击落 {target_user_link} 失败"),
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        try:
-            await client.send_message(
-                target_user_id,
-                _t(
-                    f"<b>你已被 {action_user_link} 踢出 {get_md_chat_link(message.chat)}</b>\n如有异议请联系群组管理:\n"
-                    f"{admins}"
-                ),
-                link_preview_options=LinkPreviewOptions(is_disabled=True),
+        await kick_cooldown.clear_cooldown(chat_id, action_user_id)
+
+    await delete_messages(client, chat_id, ids, delay=0)
+    if not ban_success or not target_user or target_user.user.is_bot:
+        return
+
+    admins = "\n".join(
+        [
+            f"• {get_md_chat_link(member.user)}"
+            async for member in message.chat.get_members(
+                filter=enums.ChatMembersFilter.ADMINISTRATORS
             )
-        except Exception as e:
-            logger.exception(e)
-            logger.error("通知用户失败, 以上为错误信息")
+            if member.user.is_bot is False
+        ]
+    )
+    try:
+        await client.send_message(
+            target_user_id,
+            _t(
+                f"<b>你已被 {action_user_link} 踢出 {get_md_chat_link(message.chat)}</b>\n如有异议请联系群组管理:\n"
+                f"{admins}"
+            ),
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception as e:
+        logger.exception(e)
+        logger.error("通知用户失败, 以上为错误信息")
 
 
 async def admin_kick(message: Message, client: Client) -> None:

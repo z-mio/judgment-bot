@@ -50,6 +50,7 @@ ae9543316818: '<b>冷卻中... | 剩餘: {remaining_time}</b>
   如有廣告哥，可喊其他群友幫忙砍一刀'
 b2b524821cc9: 封禁頻道請使用 /bc
 bd8c756e7924: 封禁頻道失敗
+c1683031e76a: '{action_user_link} 已刪除廣告訊息，但擊落 {target_user_link} 失敗'
 c8d7362a00c1: 權限不足
 c8ed40af510b: 放出 {get_md_chat_link(unban_user)} 失敗
 cb88e1558d07: 請回覆一條消息
