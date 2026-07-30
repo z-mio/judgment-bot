@@ -23,18 +23,16 @@ async def _new_members(_: Any, __: Any, event: ChatMemberUpdated) -> bool:
         old_member = event.old_chat_member
         new_member = event.new_chat_member
         new_user = new_member.user
-        if not new_user:
-            return False
         if new_member.status not in {
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.RESTRICTED,
         }:
             return False
-        if not new_member.is_member:
+        if getattr(new_member, "is_member", True) is False:
             return False
         if old_member and old_member.user and old_member.user.id == new_user.id:
             old_status = old_member.status
-            old_is_member = old_member.is_member
+            old_is_member = getattr(old_member, "is_member", None)
             if old_status in {
                 ChatMemberStatus.MEMBER,
                 ChatMemberStatus.ADMINISTRATOR,
