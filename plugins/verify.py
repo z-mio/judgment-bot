@@ -630,15 +630,10 @@ async def progress_start(client: Client, message: Message, data: StartData) -> N
 
 @Client.on_chat_member_updated(new_members & filters.admin)
 async def verify(client: Client, event: ChatMemberUpdated) -> None:
-    if (
-        event.chat.id is None
-        or not event.new_chat_member
-        or not event.new_chat_member.user
-    ):
-        print(event)
+    if not event.chat.id:
         return
 
-    session = VerifySession.create(event.chat.id, event.new_chat_member.user.id)
+    session = VerifySession.create(event.chat.id, event.from_user.id)
     context = await init_context(client, session)
     if not context:
         return
