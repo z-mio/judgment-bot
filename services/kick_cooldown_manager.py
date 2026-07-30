@@ -48,11 +48,11 @@ class KickCooldownManager:
 
         time_parts = []
         if hours > 0:
-            time_parts.append(f"<code>{hours}</code>h")
+            time_parts.append(f"`{hours}`h")
         if minutes > 0:
-            time_parts.append(f"<code>{minutes}</code>m")
+            time_parts.append(f"`{minutes}`m")
         if seconds > 0 or not time_parts:
-            time_parts.append(f"<code>{seconds}</code>s")
+            time_parts.append(f"`{seconds}`s")
 
         return "".join(time_parts)
 

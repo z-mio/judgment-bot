@@ -5,8 +5,6 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "apscheduler>=3.11.0",
-    "easy-ai18n>=1.1.2",
     "kurigram>=2.2.3",
     "loguru>=0.7.3",
     "pydantic>=2.12.3",

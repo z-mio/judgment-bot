@@ -12,6 +12,9 @@ async def _is_admin(_: Any, __: Any, message: Message) -> bool:
     return bool(message.from_user and message.from_user.id in bs.admins)
 
 
+is_admin = filters.create(_is_admin)
+
+
 async def _new_members(_: Any, __: Any, event: ChatMemberUpdated) -> bool:
     try:
         if not event.from_user or not event.new_chat_member:
@@ -20,16 +23,18 @@ async def _new_members(_: Any, __: Any, event: ChatMemberUpdated) -> bool:
         old_member = event.old_chat_member
         new_member = event.new_chat_member
         new_user = new_member.user
+        if not new_user:
+            return False
         if new_member.status not in {
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.RESTRICTED,
         }:
             return False
-        if getattr(new_member, "is_member", True) is False:
+        if not new_member.is_member:
             return False
         if old_member and old_member.user and old_member.user.id == new_user.id:
             old_status = old_member.status
-            old_is_member = getattr(old_member, "is_member", None)
+            old_is_member = old_member.is_member
             if old_status in {
                 ChatMemberStatus.MEMBER,
                 ChatMemberStatus.ADMINISTRATOR,
@@ -41,6 +46,9 @@ async def _new_members(_: Any, __: Any, event: ChatMemberUpdated) -> bool:
         return bool(event.from_user.id == new_user.id)
     except Exception:
         return False
+
+
+new_members = filters.create(_new_members)
 
 
 def start_filter(pattern: str = ".*") -> filters.Filter:
@@ -59,5 +67,8 @@ def start_filter(pattern: str = ".*") -> filters.Filter:
     return filters.create(func)
 
 
-is_admin = filters.create(_is_admin)
-new_members = filters.create(_new_members)
+async def _guest_bot_message(_: Any, __: Any, msg: Message) -> bool:
+    return bool(msg.guest_bot_caller_chat or msg.guest_bot_caller_user)
+
+
+guest_bot_message = filters.create(_guest_bot_message)
