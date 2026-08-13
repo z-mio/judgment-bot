@@ -32,6 +32,8 @@ async def unban(cli: Client, msg: Message) -> None:
         return
 
     unban_id = msg.command[1]
+    if unban_id.isdigit():
+        unban_id = int(unban_id)
 
     try:
         unban_user = await cli.get_chat(unban_id)
