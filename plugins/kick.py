@@ -16,7 +16,10 @@ from plugins.kick_flow import (
 
 @Client.on_message(filters.command("kick") & filters.group & filters.admin)
 async def kick(cli: Client, msg: Message) -> None:
-    if not msg.from_user or not msg.chat or msg.chat.id is None:
+    if not msg.chat or msg.chat.id is None:
+        return
+    # 匿名管理员: from_user 为 None, sender_chat 为群组本身
+    if not msg.from_user and (not msg.sender_chat or msg.sender_chat.id != msg.chat.id):
         return
 
     if not msg.reply_to_message:
@@ -27,7 +30,11 @@ async def kick(cli: Client, msg: Message) -> None:
     if not context:
         return
 
-    if context.reply.from_user and context.reply.from_user.id == context.action_user.id:
+    if (msg.sender_chat == context.reply.sender_chat) or (
+        context.action_user
+        and context.reply.from_user
+        and context.reply.from_user.id == context.action_user.id
+    ):
         await msg.reply("紫砂吗? 有意思")
         return
 
@@ -41,6 +48,11 @@ async def kick(cli: Client, msg: Message) -> None:
 
     if not context.reply.from_user:
         await msg.reply("无法识别目标用户")
+        return
+
+    # 匿名管理员一定是管理员, 直接走 admin_kick
+    if not context.action_user:
+        await admin_kick(cli, msg)
         return
 
     if await member_is_admin(cli, context.chat_id, context.action_user.id):

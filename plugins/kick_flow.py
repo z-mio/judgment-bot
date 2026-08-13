@@ -31,7 +31,7 @@ TARGET_JOINED_DAYS = 30
 class KickCommandContext:
     chat: Chat
     chat_id: int
-    action_user: User
+    action_user: User | None  # 匿名管理员时为 None
     reply: Message
 
 
@@ -44,12 +44,10 @@ class MemberKickConfirmData:
 
 
 def get_kick_command_context(msg: Message) -> KickCommandContext | None:
-    if (
-        not msg.from_user
-        or not msg.chat
-        or msg.chat.id is None
-        or not msg.reply_to_message
-    ):
+    if not msg.chat or msg.chat.id is None or not msg.reply_to_message:
+        return None
+    # 匿名管理员: from_user 为 None, sender_chat 为群组本身
+    if not msg.from_user and not msg.sender_chat:
         return None
     return KickCommandContext(
         chat=msg.chat,
@@ -91,11 +89,17 @@ async def assert_member_is_admin(
 
 
 async def ban_channel(cli: Client, msg: Message) -> None:
-    if not msg.from_user or not msg.chat or msg.chat.id is None:
+    if not msg.chat or msg.chat.id is None:
+        return
+    # 匿名管理员: from_user 为 None, 但 sender_chat 存在
+    if not msg.from_user and not msg.sender_chat:
         return
 
     chat_id = msg.chat.id
-    if not await assert_member_is_admin(cli, chat_id, msg.from_user.id, msg):
+    # 匿名管理员一定是管理员, 无需额外检查
+    if msg.from_user and not await assert_member_is_admin(
+        cli, chat_id, msg.from_user.id, msg
+    ):
         return
 
     channel_msg = msg.reply_to_message
@@ -124,7 +128,7 @@ async def ban_channel(cli: Client, msg: Message) -> None:
 
 async def member_kick_button(msg: Message) -> None:
     context = get_kick_command_context(msg)
-    if not context:
+    if not context or context.action_user is None:
         return
 
     target_user = context.reply.from_user

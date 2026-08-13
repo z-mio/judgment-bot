@@ -15,11 +15,15 @@ from plugins.helpers import get_md_chat_link, get_chat_link, member_is_admin
 @Client.on_message(filters.command("unban") & filters.group & filters.admin)
 async def unban(cli: Client, msg: Message) -> None:
 
-    if not msg.from_user or not msg.chat or msg.chat.id is None:
+    if not msg.chat or msg.chat.id is None:
+        return
+    # 匿名管理员: from_user 为 None, sender_chat 为群组本身
+    if not msg.from_user and (not msg.sender_chat or msg.sender_chat.id != msg.chat.id):
         return
 
     chat_id = msg.chat.id
-    if not await member_is_admin(cli, chat_id, msg.from_user.id):
+    # 匿名管理员一定是管理员, 无需额外检查
+    if msg.from_user and not await member_is_admin(cli, chat_id, msg.from_user.id):
         await msg.reply("权限不足")
         return
 
@@ -75,9 +79,12 @@ async def unban(cli: Client, msg: Message) -> None:
             logger.error("恢复用户权限失败, 以上为错误信息")
 
         try:
+            # 匿名管理员时 msg.from_user 为 None, 但 msg.sender_chat 存在
+            action_user = msg.from_user or msg.sender_chat
+            assert action_user is not None
             await cli.send_message(
                 target_id,
-                f"{get_md_chat_link(msg.from_user)} 已在 {get_md_chat_link(msg.chat)} 中将你解除封禁",
+                f"{get_md_chat_link(action_user)} 已在 {get_md_chat_link(msg.chat)} 中将你解除封禁",
                 reply_markup=Ikm(
                     [
                         [
