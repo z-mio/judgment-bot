@@ -32,11 +32,11 @@ async def unban(cli: Client, msg: Message) -> None:
         return
 
     unban_id = msg.command[1]
-    if unban_id.isdigit():
-        unban_id = int(unban_id)
 
     try:
-        unban_user = await cli.get_chat(unban_id)
+        unban_user = await cli.get_chat(
+            int(unban_id) if unban_id.isdigit() else unban_id
+        )
     except Exception as e:
         logger.exception(e)
         logger.error("获取用户信息失败, 以上为错误信息")

@@ -30,7 +30,7 @@ async def kick(cli: Client, msg: Message) -> None:
     if not context:
         return
 
-    if (msg.sender_chat == context.reply.sender_chat) or (
+    if (msg.sender_chat and (msg.sender_chat == context.reply.sender_chat)) or (
         context.action_user
         and context.reply.from_user
         and context.reply.from_user.id == context.action_user.id
