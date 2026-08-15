@@ -92,11 +92,13 @@ async def unban(cli: Client, msg: Message) -> None:
                         [
                             Ikb(
                                 text="点击重新加入群组",
-                                url=get_chat_link(msg.chat),
+                                url=u,
                             )
                         ]
                     ]
-                ),
+                )
+                if (u := get_chat_link(msg.chat))
+                else None,
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         except Exception as e:

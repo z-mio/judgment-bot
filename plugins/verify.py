@@ -469,7 +469,9 @@ async def verify_pass(client: Client, context: VerifyContext, message: Message) 
     )
     await message.reply(
         f"**{get_md_chat_link(context.chat)} 验证通过**",
-        reply_markup=Ikm([[Ikb(text="返回群组", url=get_chat_link(context.chat))]]),
+        reply_markup=Ikm([[Ikb(text="返回群组", url=u)]])
+        if (u := get_chat_link(context.chat))
+        else None,
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
     await end_text(client, context, "验证通过")
