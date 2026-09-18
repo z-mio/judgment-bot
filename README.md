@@ -66,17 +66,17 @@ cp .env.example .env
 
 按需填写以下配置:
 
-| 名称 | 描述 | 默认值 |
-| --- | --- | --- |
-| `API_ID` | Telegram API ID, 可在 my.telegram.org 获取 | 必填 |
-| `API_HASH` | Telegram API Hash, 可在 my.telegram.org 获取 | 必填 |
-| `BOT_TOKEN` | 在 BotFather 获取的 Bot Token | 必填 |
-| `ADMINS` | 管理员用户 ID, 多个用户用英文逗号分隔 | 空 |
-| `BOT_PROXY` | Bot 代理地址, 海外服务器通常不需要填写 | 空 |
-| `REDIS_HOST` | Redis 服务器地址 | `localhost` |
-| `REDIS_PORT` | Redis 服务器端口 | `6379` |
-| `REDIS_PASSWORD` | Redis 密码, 如果没有设置可以留空 | 空 |
-| `DEBUG` | 调试模式, 设置为 `true` 启用调试日志 | `false` |
+| 名称             | 描述                                         | 默认值      |
+|------------------|----------------------------------------------|-------------|
+| `API_ID`         | Telegram API ID, 可在 my.telegram.org 获取   | 必填        |
+| `API_HASH`       | Telegram API Hash, 可在 my.telegram.org 获取 | 必填        |
+| `BOT_TOKEN`      | 在 BotFather 获取的 Bot Token                | 必填        |
+| `ADMINS`         | 管理员用户 ID, 多个用户用英文逗号分隔        | 空          |
+| `BOT_PROXY`      | Bot 代理地址, 海外服务器通常不需要填写       | 空          |
+| `REDIS_HOST`     | Redis 服务器地址                             | `localhost` |
+| `REDIS_PORT`     | Redis 服务器端口                             | `6379`      |
+| `REDIS_PASSWORD` | Redis 密码, 如果没有设置可以留空             | 空          |
+| `DEBUG`          | 调试模式, 设置为 `true` 启用调试日志         | `false`     |
 
 如果使用 `docker compose` 部署, 通常不需要手动填写 Redis 配置
 
@@ -104,12 +104,6 @@ uv run bot.py
 ---
 
 ## 📖 使用方式
-
-### 设置菜单
-
-私聊 Bot 发送: `/menu`
-
-Bot 会自动设置指令菜单
 
 ### 处理广告用户
 
