@@ -8,6 +8,8 @@ from pyrogram.enums import ChatMemberStatus
 from log import logger
 from pyrogram.types import User, Chat
 
+logger = logger.bind(name="Helper")
+
 COMMANDS = {
     "kick": "封禁用户/频道",
     "unban": "解封用户/频道",
@@ -46,9 +48,8 @@ def get_chat_link(chat: Chat) -> str | None:
 async def member_is_admin(cli: Client, chat_id: int, user_id: int) -> bool:
     try:
         member = await cli.get_chat_member(chat_id, user_id)
-    except Exception as e:
-        logger.exception(e)
-        logger.warning(f"获取成员权限失败: chat_id={chat_id}, user_id={user_id}")
+    except Exception:
+        logger.exception(f"获取成员权限失败: chat_id={chat_id} | user_id={user_id}")
         return False
 
     return member.status in {
@@ -70,22 +71,20 @@ async def delete_messages(
                 continue
             try:
                 await cli.delete_messages(chat_id, chunk)
-            except Exception as e:
-                logger.exception(e)
-                logger.warning(
-                    f"批量删除消息失败, 尝试逐条删除: chat_id={chat_id}, ids={chunk}"
+            except Exception:
+                logger.exception(
+                    f"批量删除消息失败, 尝试逐条删除: chat_id={chat_id} | ids={chunk}"
                 )
                 for message_id in chunk:
                     try:
                         await cli.delete_messages(chat_id, message_id)
-                    except Exception as item_error:
-                        logger.exception(item_error)
+                    except Exception as e:
                         logger.warning(
-                            f"删除消息失败: chat_id={chat_id}, message_id={message_id}"
+                            f"删除消息失败: chat_id={chat_id} | "
+                            f"message_id={message_id} | {e}"
                         )
-    except Exception as e:
-        logger.exception(e)
-        logger.warning(f"删除消息流程失败: chat_id={chat_id}, ids={message_ids}")
+    except Exception:
+        logger.exception(f"删除消息流程失败: chat_id={chat_id} | ids={message_ids}")
 
 
 def decode_start_payload(value: str) -> str:
@@ -108,9 +107,9 @@ async def delete_member_messages(
     msg_id: int,
     limit: int = 100,
     delay: int = 0,
-) -> None:
+) -> int:
     """
-    删除最近 100 条消息
+    删除最近 100 条消息中该用户发送的消息, 返回删除条数
     """
     if delay:
         await asyncio.sleep(delay)
@@ -124,4 +123,6 @@ async def delete_member_messages(
     dms = [
         m.id for m in msgs if not m.empty and m.from_user and m.from_user.id == user_id
     ]
-    await cli.delete_messages(chat_id, dms)
+    if dms:
+        await cli.delete_messages(chat_id, dms)
+    return len(dms)

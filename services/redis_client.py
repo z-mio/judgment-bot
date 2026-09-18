@@ -5,6 +5,8 @@ from redis.exceptions import ConnectionError, TimeoutError
 
 from log import logger
 
+logger = logger.bind(name="Redis")
+
 rc = Redis(
     host=bs.redis_host,
     port=bs.redis_port,
@@ -24,6 +26,6 @@ async def check_redis_connection() -> bool:
     except (ConnectionError, TimeoutError) as e:
         logger.error(f"Redis 连接失败: {e}")
         return False
-    except Exception as e:
-        logger.exception(f"Redis 连接出现未知错误: {e}")
+    except Exception:
+        logger.exception(f"Redis 连接出现未知错误: {bs.redis_host}:{bs.redis_port}")
         return False

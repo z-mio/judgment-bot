@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, Message
 
+from log import logger
 from plugins.helpers import member_is_admin
 from plugins.kick_flow import (
     admin_kick,
@@ -13,6 +14,8 @@ from plugins.kick_flow import (
     reply_and_delete,
 )
 
+logger = logger.bind(name="Kick")
+
 
 @Client.on_message(filters.command("kick") & filters.group & filters.admin)
 async def kick(cli: Client, msg: Message) -> None:
@@ -22,7 +25,10 @@ async def kick(cli: Client, msg: Message) -> None:
     if not msg.from_user and (not msg.sender_chat or msg.sender_chat.id != msg.chat.id):
         return
 
+    actor = msg.from_user.id if msg.from_user else "匿名管理员"
+
     if not msg.reply_to_message:
+        logger.debug(f"忽略击落: 未回复消息 | user_id={actor} | chat_id={msg.chat.id}")
         await reply_and_delete(cli, msg, msg.chat.id, "请回复一条消息")
         return
 
@@ -35,10 +41,16 @@ async def kick(cli: Client, msg: Message) -> None:
         and context.reply.from_user
         and context.reply.from_user.id == context.action_user.id
     ):
+        logger.info(
+            f"击落被拒: 目标是自己 | user_id={actor} | chat_id={context.chat_id}"
+        )
         await msg.reply("紫砂吗? 有意思")
         return
 
     if context.reply.from_user and cli.me and context.reply.from_user.id == cli.me.id:
+        logger.info(
+            f"击落被拒: 目标是 Bot | user_id={actor} | chat_id={context.chat_id}"
+        )
         await msg.reply("big胆!")
         return
 
@@ -47,6 +59,9 @@ async def kick(cli: Client, msg: Message) -> None:
         return
 
     if not context.reply.from_user:
+        logger.info(
+            f"击落被拒: 无法识别目标用户 | user_id={actor} | chat_id={context.chat_id}"
+        )
         await msg.reply("无法识别目标用户")
         return
 
@@ -56,8 +71,14 @@ async def kick(cli: Client, msg: Message) -> None:
         return
 
     if await member_is_admin(cli, context.chat_id, context.action_user.id):
+        logger.debug(
+            f"击落分支: 管理员直接击落 | user_id={actor} | chat_id={context.chat_id}"
+        )
         await admin_kick(cli, msg)
     else:
+        logger.debug(
+            f"击落分支: 群友确认流程 | user_id={actor} | chat_id={context.chat_id}"
+        )
         await member_kick_button(msg)
 
 

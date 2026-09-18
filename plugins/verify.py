@@ -35,6 +35,8 @@ from plugins.helpers import (
 from services.redis_client import rc
 from services.verify_fail_manager import verify_fail_manager
 
+logger = logger.bind(name="Verify")
+
 VERIFY_NAME = "easy_validator"
 VERIFY_REFRESH_MIN_SECONDS = 5
 VERIFY_REFRESH_MAX_SECONDS = 10
@@ -196,6 +198,12 @@ def chat_display_name(chat: Chat | None) -> str:
     return chat.full_name or str(chat.id)
 
 
+def member_display_name(member: ChatMember) -> str:
+    if not member.user:
+        return "未知用户"
+    return member.user.full_name or str(member.user.id)
+
+
 def task_key(session: VerifySession, name: TaskName) -> str:
     return f"{session.validator_id}:{session.rid}:{name}"
 
@@ -224,9 +232,8 @@ def schedule_verify_task(
             await task_factory()
         except asyncio.CancelledError:
             raise
-        except Exception as e:
-            logger.exception(e)
-            logger.error(f"验证任务执行失败: {key}")
+        except Exception:
+            logger.exception(f"验证任务执行失败: task={key}")
 
     task = asyncio.create_task(runner())
     VERIFY_TASKS[key] = task
@@ -247,6 +254,8 @@ def cancel_verify_tasks(session: VerifySession) -> None:
 async def cancel_all_verify_tasks() -> None:
     tasks = list(VERIFY_TASKS.values())
     VERIFY_TASKS.clear()
+    if tasks:
+        logger.info(f"正在取消 {len(tasks)} 个进行中的验证任务")
     for task in tasks:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -296,18 +305,18 @@ async def mark_verify_failed(chat_id: int, user_id: int) -> None:
     """标记验证失败用户, 失败不影响主流程"""
     try:
         await verify_fail_manager.mark_failed(chat_id, user_id)
-    except Exception as e:
-        logger.exception(e)
-        logger.error(f"标记验证失败用户失败: {user_id} | {chat_id}")
+        logger.debug(f"已写入验证失败标记: user_id={user_id} | chat_id={chat_id}")
+    except Exception:
+        logger.exception(f"写入验证失败标记失败: user_id={user_id} | chat_id={chat_id}")
 
 
 async def clear_verify_failed(chat_id: int, user_id: int) -> None:
     """清除验证失败标记, 失败不影响主流程"""
     try:
         await verify_fail_manager.clear_failed(chat_id, user_id)
-    except Exception as e:
-        logger.exception(e)
-        logger.error(f"清除验证失败标记失败: {user_id} | {chat_id}")
+        logger.debug(f"已清除验证失败标记: user_id={user_id} | chat_id={chat_id}")
+    except Exception:
+        logger.exception(f"清除验证失败标记失败: user_id={user_id} | chat_id={chat_id}")
 
 
 def final_state_from_value(value: str) -> FinalState | None:
@@ -359,9 +368,10 @@ async def init_context(client: Client, session: VerifySession) -> VerifyContext 
         if not chat:
             return None
         member = await client.get_chat_member(session.chat_id, session.user_id)
-    except Exception as e:
-        logger.exception(e)
-        logger.error("初始化验证上下文失败")
+    except Exception:
+        logger.exception(
+            f"初始化验证上下文失败: user_id={session.user_id} | chat_id={session.chat_id}"
+        )
         return None
 
     return VerifyContext(session=session, chat=chat, member=member)
@@ -398,12 +408,26 @@ async def send_start_verify_message(client: Client, context: VerifyContext) -> N
     session.verify_msg_id = verify_msg.id
     session.state = STATE_WAITING_CLICK
     await save_session(session)
+
+    logger.info(
+        f"开始验证: {member_display_name(context.member)} | user_id={session.user_id} | "
+        f"chat_id={session.chat_id} | chat={chat_display_name(context.chat)} | "
+        f"rid={session.rid} | 等待 {wait_seconds}s"
+    )
+
     try:
-        await delete_member_messages(
+        deleted = await delete_member_messages(
             client, session.chat_id, session.user_id, verify_msg.id, delay=0
         )
-    except Exception as e:
-        logger.error(f"删除消息失败: {e}")
+        logger.debug(
+            f"已清理验证用户历史消息: {deleted} 条 | user_id={session.user_id} | "
+            f"chat_id={session.chat_id}"
+        )
+    except Exception:
+        logger.exception(
+            f"清理验证用户历史消息失败: user_id={session.user_id} | "
+            f"chat_id={session.chat_id}"
+        )
 
     schedule_verify_task(
         session,
@@ -438,10 +462,18 @@ async def refresh_verify_message(client: Client, session: VerifySession) -> None
             reply_markup=await verify_buttons(client, session, "two"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-    except Exception as e:
-        logger.exception(e)
+    except Exception:
+        logger.exception(
+            f"刷新验证提示失败: user_id={session.user_id} | chat_id={session.chat_id} | "
+            f"rid={session.rid}"
+        )
         await verify_end(session)
         return
+
+    logger.debug(
+        f"验证提示已刷新: user_id={session.user_id} | chat_id={session.chat_id} | "
+        f"rid={session.rid}"
+    )
 
     if not await is_current_waiting(session):
         return
@@ -503,9 +535,10 @@ async def verify_pass(client: Client, context: VerifyContext, message: Message) 
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
     await end_text(client, context, "验证通过")
-    logger.debug(
-        f"验证通过: 已在 {chat_display_name(context.chat)} 中通过验证: "
-        f"{context.member.user.full_name if context.member.user else None} | {session.user_id} | {session.chat_id}"
+    logger.info(
+        f"验证通过: {member_display_name(context.member)} | user_id={session.user_id} | "
+        f"chat_id={session.chat_id} | chat={chat_display_name(context.chat)} | "
+        f"rid={session.rid}"
     )
 
 
@@ -520,9 +553,10 @@ async def verify_fail(client: Client, context: VerifyContext, message: Message) 
         f"**{get_md_chat_link(context.chat)} 验证失败**\n请 1 分钟后重试",
     )
     await end_text(client, context, "验证未通过, 已击落")
-    logger.debug(
-        f"验证失败: 已在 {chat_display_name(context.chat)} 中踢出: "
-        f"{context.member.user.full_name if context.member.user else None} | {session.user_id} | {session.chat_id}"
+    logger.info(
+        f"验证失败: {member_display_name(context.member)} | user_id={session.user_id} | "
+        f"chat_id={session.chat_id} | chat={chat_display_name(context.chat)} | "
+        f"rid={session.rid} | 已临时踢出并标记"
     )
 
 
@@ -543,9 +577,10 @@ async def verify_timeout(client: Client, session: VerifySession) -> None:
             session.chat_id, session.user_id, until_date=until_date
         )
         await end_text(client, context, "验证超时, 已击落")
-        logger.debug(
-            f"验证超时: 已在 {chat_display_name(context.chat)} 中临时踢出60秒: "
-            f"{context.member.user.full_name if context.member.user else None} | {session.user_id} | {session.chat_id}"
+        logger.info(
+            f"验证超时: {member_display_name(context.member)} | "
+            f"user_id={session.user_id} | chat_id={session.chat_id} | "
+            f"chat={chat_display_name(context.chat)} | rid={session.rid} | 已临时踢出并标记"
         )
     finally:
         await verify_end(session)
@@ -567,9 +602,10 @@ async def admin_verify_pass(
         context,
         f"由管理 {get_md_chat_link(callback.from_user)} 手动通过",
     )
-    logger.debug(
-        f"验证通过: 已在 {chat_display_name(context.chat)} 中通过验证: "
-        f"{context.member.user.full_name if context.member.user else None} | {session.user_id} | {session.chat_id}"
+    logger.info(
+        f"管理员手动通过: {member_display_name(context.member)} | "
+        f"user_id={session.user_id} | chat_id={session.chat_id} | "
+        f"chat={chat_display_name(context.chat)} | admin_id={callback.from_user.id}"
     )
 
 
@@ -584,9 +620,10 @@ async def admin_verify_fail(
         context,
         f"由管理 {get_md_chat_link(callback.from_user)} 手动击落",
     )
-    logger.debug(
-        f"验证失败(管理手动踢出): 已在 {chat_display_name(context.chat)} 中踢出: "
-        f"{context.member.user.full_name if context.member.user else None} | {session.user_id} | {session.chat_id}"
+    logger.info(
+        f"管理员手动击落: {member_display_name(context.member)} | "
+        f"user_id={session.user_id} | chat_id={session.chat_id} | "
+        f"chat={chat_display_name(context.chat)} | admin_id={callback.from_user.id}"
     )
 
 
@@ -603,13 +640,19 @@ async def end_text(client: Client, context: VerifyContext, text: str) -> None:
         )
         await asyncio.sleep(3)
         await client.delete_messages(session.chat_id, session.current_verify_msg_id)
-    except Exception as e:
-        logger.exception(e)
+    except Exception:
+        logger.exception(
+            f"更新验证结果消息失败: user_id={session.user_id} | chat_id={session.chat_id}"
+        )
 
 
 async def verify_end(session: VerifySession) -> None:
     cancel_verify_tasks(session)
     await delete_session_if_current(session)
+    logger.debug(
+        f"验证会话已结束: user_id={session.user_id} | chat_id={session.chat_id} | "
+        f"rid={session.rid}"
+    )
 
 
 async def progress_callback(
@@ -681,6 +724,7 @@ async def verify(client: Client, event: ChatMemberUpdated) -> None:
 async def verify_callback(client: Client, callback: CallbackQuery) -> None:
     data = await decode_callback_data(callback)
     if not data:
+        logger.debug(f"忽略验证回调: 数据无法解析 | user_id={callback.from_user.id}")
         await callback.answer("验证已过期", show_alert=True)
         return
 
@@ -701,6 +745,10 @@ async def verify_callback(client: Client, callback: CallbackQuery) -> None:
 
     session = await load_current_session(data.validator_id, data.rid)
     if not session:
+        logger.debug(
+            f"忽略验证回调: 会话已过期 | user_id={callback.from_user.id} | "
+            f"rid={data.rid} | operate={data.operate}"
+        )
         await callback.answer("验证已过期", show_alert=True)
         return
     if (
@@ -708,12 +756,20 @@ async def verify_callback(client: Client, callback: CallbackQuery) -> None:
         and click_user.user
         and click_user.user.id != session.user_id
     ):
+        logger.debug(
+            f"忽略验证回调: 非本人操作 | user_id={callback.from_user.id} | "
+            f"target_user_id={session.user_id} | chat_id={session.chat_id}"
+        )
         await callback.answer("这不是你的验证", show_alert=True)
         return
     if data.operate == "admin" and click_user.status not in {
         ChatMemberStatus.OWNER,
         ChatMemberStatus.ADMINISTRATOR,
     }:
+        logger.warning(
+            f"忽略验证回调: 权限不足 | user_id={callback.from_user.id} | "
+            f"chat_id={session.chat_id}"
+        )
         await callback.answer("权限不足", show_alert=True)
         return
     if data.operate != "admin" or data.value not in {"pass", "fail"}:
@@ -737,10 +793,18 @@ async def start_handler(client: Client, message: Message) -> None:
 
     session = await load_current_session(data.validator_id, data.rid)
     if not session:
+        logger.debug(
+            f"忽略验证链接: 会话已过期 | user_id={message.from_user.id} | "
+            f"rid={data.rid} | operate={data.operate}"
+        )
         await message.reply("验证已过期")
         message.stop_propagation()
         return
     if data.operate == "verify" and message.from_user.id != session.user_id:
+        logger.debug(
+            f"忽略验证链接: 非本人操作 | user_id={message.from_user.id} | "
+            f"target_user_id={session.user_id} | chat_id={session.chat_id}"
+        )
         await message.reply("这不是你的验证")
         message.stop_propagation()
         return

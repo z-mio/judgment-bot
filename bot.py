@@ -10,6 +10,8 @@ from pyrogram.types import BotCommand
 from services.redis_client import check_redis_connection, rc
 from utils.event_loop import setup_optimized_event_loop
 
+logger = logger.bind(name="Bot")
+
 
 class JudgmentBot(Client):
     def __init__(self) -> None:
@@ -34,9 +36,11 @@ class JudgmentBot(Client):
         return self
 
     async def stop(self, *args, **kwargs) -> Client:
+        logger.info("Bot 正在停止...")
         await cancel_all_verify_tasks()
         await rc.aclose()
         await super().stop(*args)
+        await logger.complete()
         return self
 
     def init_watchdog(self) -> None:
@@ -53,7 +57,7 @@ class JudgmentBot(Client):
         await self.set_bot_commands(
             [BotCommand(command=k, description=v) for k, v in COMMANDS.items()]
         )
-        logger.debug(f"菜单已设置: {COMMANDS}")
+        logger.info(f"命令菜单已设置: {COMMANDS}")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,8 @@ from plugins.helpers import (
 )
 from services.kick_cooldown_manager import kick_cooldown
 
+logger = logger.bind(name="Kick")
+
 LEAST_JOINED_DAYS = 30
 TARGET_JOINED_DAYS = 30
 
@@ -117,12 +119,17 @@ async def ban_channel(cli: Client, msg: Message) -> None:
 
     try:
         await cli.ban_chat_member(chat_id, sender_chat.id)
-    except Exception as e:
-        logger.exception(e)
-        logger.error("封禁频道失败, 以上为错误信息")
+    except Exception:
+        logger.exception(
+            f"封禁频道失败: channel_id={sender_chat.id} | chat_id={chat_id}"
+        )
         await msg.reply("封禁频道失败")
         return
 
+    logger.info(
+        f"已封禁频道: {sender_chat.full_name or sender_chat.id} | "
+        f"channel_id={sender_chat.id} | chat_id={chat_id}"
+    )
     await msg.reply(
         f"已封禁频道 {get_md_chat_link(sender_chat)}",
         link_preview_options=LinkPreviewOptions(is_disabled=True),
@@ -136,12 +143,20 @@ async def member_kick_button(msg: Message) -> None:
 
     target_user = context.reply.from_user
     if not target_user:
+        logger.info(
+            f"击落被拒: 无法识别目标用户 | user_id={context.action_user.id} | "
+            f"chat_id={context.chat_id}"
+        )
         await msg.reply("无法识别目标用户")
         return
 
     try:
         member = await context.chat.get_member(context.action_user.id)
     except UserNotParticipant:
+        logger.info(
+            f"击落被拒: 发起人不在群内 | user_id={context.action_user.id} | "
+            f"chat_id={context.chat_id}"
+        )
         await msg.reply("非群组成员, 请先加入群组")
         return
 
@@ -150,6 +165,10 @@ async def member_kick_button(msg: Message) -> None:
 
     action_days = joined_days(member.joined_date)
     if action_days < LEAST_JOINED_DAYS:
+        logger.info(
+            f"击落被拒: 发起人入群 {action_days} 天不足 {LEAST_JOINED_DAYS} 天 | "
+            f"user_id={context.action_user.id} | chat_id={context.chat_id}"
+        )
         await msg.reply(
             f"此功能需要入群天数大于 `{LEAST_JOINED_DAYS}` 天\n"
             f"已入群天数: `{action_days}` 天"
@@ -168,9 +187,17 @@ async def can_kick_target(msg: Message, chat: Chat, target_user_id: int) -> bool
     except UserNotParticipant:
         return True
     if not target_member or not target_member.user:
+        logger.info(
+            f"击落被拒: 无法获取目标成员信息 | target_user_id={target_user_id} | "
+            f"chat_id={chat.id}"
+        )
         return False
     target_days = joined_days(target_member.joined_date)
     if target_days > TARGET_JOINED_DAYS:
+        logger.info(
+            f"击落被拒: 目标入群 {target_days} 天超过 {TARGET_JOINED_DAYS} 天 | "
+            f"target_user_id={target_user_id} | chat_id={chat.id}"
+        )
         await msg.reply(
             f"{get_md_chat_link(target_member.user)} 入群天数 `{target_days}` 天, "
             f"大于 `{TARGET_JOINED_DAYS}` 天, 无法击落",
@@ -187,6 +214,10 @@ async def start_kick_cooldown(msg: Message, chat_id: int, action_user_id: int) -
 
     remaining_time = await kick_cooldown.get_remaining_time_formatted(
         chat_id, action_user_id
+    )
+    logger.info(
+        f"击落被拒: 冷却中 剩余 {remaining_time} | user_id={action_user_id} | "
+        f"chat_id={chat_id}"
     )
     await msg.reply(
         f"**冷却中... | 剩余: {remaining_time}**\n如有广告哥, 可喊其他群友帮忙砍一刀"
@@ -220,12 +251,18 @@ async def send_member_kick_confirm(
         ),
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
+    logger.info(
+        f"已发送击落确认: user_id={action_user_id} | "
+        f"target_user_id={target.from_user.id} | "
+        f"chat_id={msg.chat.id if msg.chat else None}"
+    )
 
 
 async def cancel_member_kick(
     cli: Client, msg: Message, chat_id: int, action_user_id: int
 ) -> None:
     await kick_cooldown.clear_cooldown(chat_id, action_user_id)
+    logger.info(f"已取消击落: user_id={action_user_id} | chat_id={chat_id}")
     await msg.edit_text("已取消操作")
 
     ids = [msg.id]
@@ -240,8 +277,10 @@ async def get_target_member(
     try:
         return await cli.get_chat_member(chat_id, target_user_id)
     except Exception as e:
-        logger.exception(e)
-        logger.warning("获取被击落用户信息失败, 将继续执行 ban 和删除消息")
+        logger.opt(exception=e).debug(
+            f"获取被击落用户信息失败, 将继续执行 ban 和删除消息: "
+            f"target_user_id={target_user_id} | chat_id={chat_id}"
+        )
         return None
 
 
@@ -250,8 +289,10 @@ async def ban_member(cli: Client, chat_id: int, target_user_id: int) -> bool:
         await cli.ban_chat_member(chat_id, target_user_id)
         return True
     except Exception as e:
-        logger.exception(e)
-        logger.error("击落用户失败, 将继续删除广告消息")
+        logger.opt(exception=e).debug(
+            f"击落用户失败, 将继续删除广告消息: target_user_id={target_user_id} | "
+            f"chat_id={chat_id}"
+        )
         return False
 
 
@@ -276,8 +317,7 @@ async def notify_kicked_member(
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception as e:
-        logger.exception(e)
-        logger.error("通知用户失败, 以上为错误信息")
+        logger.warning(f"通知被击落用户失败: user_id={target_user_id} | {e}")
 
 
 async def member_kick(
@@ -295,13 +335,19 @@ async def member_kick(
 
     chat_id = msg.chat.id
     if await member_is_admin(cli, chat_id, target_user_id):
+        logger.info(
+            f"击落被拒: 目标是管理员 | user_id={action_user_id} | "
+            f"target_user_id={target_user_id} | chat_id={chat_id}"
+        )
         await msg.edit_text("造反吗? 有意思")
         await kick_cooldown.clear_cooldown(chat_id, action_user_id)
         return
 
     target_member = await get_target_member(cli, chat_id, target_user_id)
     ban_success = await ban_member(cli, chat_id, target_user_id)
-    await delete_member_messages(cli, chat_id, target_user_id, target_message_id)
+    deleted = await delete_member_messages(
+        cli, chat_id, target_user_id, target_message_id
+    )
 
     action_user_link = (
         get_md_chat_link(command_message.from_user)
@@ -323,6 +369,20 @@ async def member_kick(
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 
+    target_name = (
+        target_member.user.full_name
+        if target_member and target_member.user
+        else str(target_user_id)
+    )
+    log_fields = (
+        f"user_id={action_user_id} | target_user_id={target_user_id} | "
+        f"target={target_name} | chat_id={chat_id} | 删除消息={deleted} 条"
+    )
+    if ban_success:
+        logger.info(f"击落完成: {log_fields}")
+    else:
+        logger.warning(f"击落失败, 仅删除广告消息: {log_fields}")
+
     if not ban_success:
         await kick_cooldown.clear_cooldown(chat_id, action_user_id)
         return
@@ -341,20 +401,30 @@ async def admin_kick(cli: Client, msg: Message) -> None:
     target_user_id = rm.from_user.id
 
     if await member_is_admin(cli, chat_id, target_user_id):
+        logger.info(
+            f"击落被拒: 目标是管理员 | "
+            f"user_id={msg.from_user.id if msg.from_user else '匿名管理员'} | "
+            f"target_user_id={target_user_id} | chat_id={chat_id}"
+        )
         await reply_and_delete(cli, msg, chat_id, "禁止窝里斗")
         return
 
     try:
         await cli.ban_chat_member(chat_id, target_user_id)
-    except Exception as e:
-        logger.exception(e)
-        logger.error("击落失败, 以上为错误信息")
+    except Exception:
+        logger.exception(
+            f"击落失败: target_user_id={target_user_id} | chat_id={chat_id}"
+        )
         await msg.reply("击落失败")
         return
 
     m = await msg.reply("已击落")
-    await delete_member_messages(cli, chat_id, target_user_id, rm.id)
+    deleted = await delete_member_messages(cli, chat_id, target_user_id, rm.id)
     message_ids = [msg.id]
     if m:
         message_ids.append(m.id)
     await delete_messages(cli, msg.chat.id, message_ids)
+    logger.info(
+        f"管理员击落完成: target_user_id={target_user_id} | "
+        f"target={rm.from_user.full_name} | chat_id={chat_id} | 删除消息={deleted} 条"
+    )

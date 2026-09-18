@@ -53,11 +53,15 @@ async def on_disconnect(cli: Client, session: Session) -> None:
 
     # 启动失败
     if not ws.is_running and not ws.restart_count:
-        exit("Bot 连接失败, 请检查设备网络和代理配置")
+        logger.critical("Bot 连接失败, 请检查设备网络和代理配置")
+        await logger.complete()
+        sys.exit(1)
 
     # 断开连接
     if ws.restart_count >= ws.max_restart_count:
-        exit(f"重启次数已达上限 ({ws.max_restart_count} 次), 结束进程")
+        logger.critical(f"重启次数已达上限 ({ws.max_restart_count} 次), 结束进程")
+        await logger.complete()
+        sys.exit(1)
 
     if ws.disconnect_count < ws.max_disconnect_count:
         ws.update_bot_disconnect_count()
@@ -67,7 +71,9 @@ async def on_disconnect(cli: Client, session: Session) -> None:
         return
 
     if bs.debug:
-        exit("Bot 已断开连接, 目前处于调试模式, 已跳过重启")
+        logger.warning("Bot 已断开连接, 目前处于调试模式, 已跳过重启")
+        await logger.complete()
+        sys.exit(1)
 
     try:
         ws.update_bot_restart_count()
@@ -78,11 +84,15 @@ async def on_disconnect(cli: Client, session: Session) -> None:
         if ws.restart_count == ws.remove_session_after_restart and not cli.in_memory:
             await remove_session_file(cli)
 
+        # 等待日志队列落盘, 避免 execv 丢失最后一条日志
+        await logger.complete()
+
         python = sys.executable
         os.execv(python, [python] + sys.argv)
-    except Exception as e:
-        logger.exception(e)
-        exit("重启失败, 结束进程, 以上为错误信息")
+    except Exception:
+        logger.exception("重启失败, 结束进程, 以上为错误信息")
+        await logger.complete()
+        sys.exit(1)
 
 
 async def remove_session_file(cli: Client) -> None:
@@ -95,5 +105,5 @@ async def remove_session_file(cli: Client) -> None:
         if (session := cli.workdir / f"{cli.name}.session") and session.exists():
             os.remove(session)
             logger.warning(f"会话文件已移除: {session}")
-    except Exception as e:
-        logger.error(f"移除会话文件失败: {e}")
+    except Exception:
+        logger.exception("移除会话文件失败")

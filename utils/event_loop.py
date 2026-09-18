@@ -3,6 +3,8 @@ import sys
 
 from log import logger
 
+logger = logger.bind(name="EventLoop")
+
 
 def setup_optimized_event_loop() -> bool:
     """配置优化的事件循环，自动选择winloop或uvloop"""
@@ -16,10 +18,8 @@ def setup_optimized_event_loop() -> bool:
         logger.debug(f"{loop_module} 已启用")
         return True
     except ImportError:
-        logger.debug(f"{loop_module} 未安装")
-        logger.debug("使用标准 asyncio 事件循环")
+        logger.debug(f"{loop_module} 未安装, 使用标准 asyncio 事件循环")
         return False
     except Exception as e:
-        logger.debug(f"启用 {loop_module} 时出错: {e}")
-        logger.debug("使用标准 asyncio 事件循环")
+        logger.debug(f"启用 {loop_module} 失败: {e}, 使用标准 asyncio 事件循环")
         return False

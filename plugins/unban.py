@@ -12,6 +12,8 @@ from log import logger
 from plugins.helpers import get_md_chat_link, get_chat_link, member_is_admin
 from plugins.verify import clear_verify_failed
 
+logger = logger.bind(name="Unban")
+
 
 @Client.on_message(filters.command("unban") & filters.group & filters.admin)
 async def unban(cli: Client, msg: Message) -> None:
@@ -23,12 +25,19 @@ async def unban(cli: Client, msg: Message) -> None:
         return
 
     chat_id = msg.chat.id
+    operator = msg.from_user.id if msg.from_user else "匿名管理员"
     # 匿名管理员一定是管理员, 无需额外检查
     if msg.from_user and not await member_is_admin(cli, chat_id, msg.from_user.id):
+        logger.warning(
+            f"解封被拒: 权限不足 | user_id={msg.from_user.id} | chat_id={chat_id}"
+        )
         await msg.reply("权限不足")
         return
 
     if not msg.command or not msg.command[1:]:
+        logger.debug(
+            f"忽略解封: 缺少用户名或 id | user_id={operator} | chat_id={chat_id}"
+        )
         await msg.reply("请加上用户名或id\n例: `/unban @username`")
         return
 
@@ -38,9 +47,8 @@ async def unban(cli: Client, msg: Message) -> None:
         unban_user = await cli.get_chat(
             int(unban_id) if unban_id.isdigit() else unban_id
         )
-    except Exception as e:
-        logger.exception(e)
-        logger.error("获取用户信息失败, 以上为错误信息")
+    except Exception:
+        logger.exception(f"获取解封目标信息失败: target={unban_id} | chat_id={chat_id}")
         await msg.reply(
             f"获取 `{unban_id}` 信息失败",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
@@ -55,6 +63,10 @@ async def unban(cli: Client, msg: Message) -> None:
 
         await cli.unban_chat_member(chat_id, target_id)
         await clear_verify_failed(chat_id, target_id)
+        logger.info(
+            f"已解封: {unban_user.full_name or unban_user.id} | user_id={target_id} | "
+            f"chat_id={chat_id} | 操作人={operator}"
+        )
 
         if unban_user.type != ChatType.PRIVATE:
             return
@@ -79,9 +91,10 @@ async def unban(cli: Client, msg: Message) -> None:
                     can_invite_users=True,
                 ),
             )
-        except Exception as e:
-            logger.exception(e)
-            logger.error("恢复用户权限失败, 以上为错误信息")
+        except Exception:
+            logger.exception(
+                f"恢复用户权限失败: user_id={target_id} | chat_id={chat_id}"
+            )
 
         try:
             # 匿名管理员时 msg.from_user 为 None, 但 msg.sender_chat 存在
@@ -105,12 +118,10 @@ async def unban(cli: Client, msg: Message) -> None:
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         except Exception as e:
-            logger.exception(e)
-            logger.error("通知用户 [解除封禁] 失败, 以上为错误信息")
+            logger.warning(f"通知用户 [解除封禁] 失败: user_id={target_id} | {e}")
 
-    except Exception as e:
-        logger.exception(e)
-        logger.error("放出用户失败, 以上为错误信息")
+    except Exception:
+        logger.exception(f"解封失败: target={unban_id} | chat_id={chat_id}")
         await msg.reply(
             f"放出 {get_md_chat_link(unban_user)} 失败",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
