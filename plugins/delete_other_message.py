@@ -14,6 +14,12 @@ async def delete_guest_bot_message(_: Client, msg: Message) -> None:
             f"已删除游客 Bot 消息: chat_id={msg.chat.id if msg.chat else None} | "
             f"message_id={msg.id}"
         )
+        if msg.reply_to_message:
+            await msg.reply_to_message.delete()
+            logger.debug(
+                f"已删除游客 Bot 回复的消息: chat_id={msg.chat.id if msg.chat else None} | "
+                f"message_id={msg.id}"
+            )
     except Exception:
         pass
 
