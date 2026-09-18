@@ -379,7 +379,6 @@ async def init_context(client: Client, session: VerifySession) -> VerifyContext 
 
 async def send_start_verify_message(client: Client, context: VerifyContext) -> None:
     session = context.session
-    await asyncio.sleep(15)
     await client.restrict_chat_member(
         session.chat_id, session.user_id, permissions=ChatPermissions()
     )
