@@ -6,6 +6,7 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import ChatMemberUpdated, Message
 
 from core.config import bs
+from services.verify_fail_manager import verify_fail_manager
 
 
 async def _is_admin(_: Any, __: Any, message: Message) -> bool:
@@ -27,6 +28,8 @@ async def _new_members(_: Any, __: Any, event: ChatMemberUpdated) -> bool:
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.RESTRICTED,
         }:
+            return False
+        if not new_user:
             return False
         if getattr(new_member, "is_member", True) is False:
             return False
@@ -70,3 +73,12 @@ async def _guest_bot_message(_: Any, __: Any, msg: Message) -> bool:
 
 
 guest_bot_message = filters.create(_guest_bot_message)
+
+
+async def _verify_failed_member(_: Any, __: Any, msg: Message) -> bool:
+    if not msg.chat or msg.chat.id is None or not msg.from_user:
+        return False
+    return await verify_fail_manager.is_failed(msg.chat.id, msg.from_user.id)
+
+
+verify_failed_member = filters.create(_verify_failed_member)

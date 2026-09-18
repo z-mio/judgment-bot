@@ -76,7 +76,10 @@ def joined_days(joined_date: datetime | None) -> int:
 
 async def reply_and_delete(cli: Client, msg: Message, chat_id: int, text: str) -> None:
     reply = await msg.reply(text)
-    await delete_messages(cli, chat_id, [msg.id, reply.id])
+    message_ids = [msg.id]
+    if reply:
+        message_ids.append(reply.id)
+    await delete_messages(cli, chat_id, message_ids)
 
 
 async def assert_member_is_admin(
@@ -164,7 +167,8 @@ async def can_kick_target(msg: Message, chat: Chat, target_user_id: int) -> bool
         target_member = await chat.get_member(target_user_id)
     except UserNotParticipant:
         return True
-
+    if not target_member or not target_member.user:
+        return False
     target_days = joined_days(target_member.joined_date)
     if target_days > TARGET_JOINED_DAYS:
         await msg.reply(
@@ -350,4 +354,7 @@ async def admin_kick(cli: Client, msg: Message) -> None:
 
     m = await msg.reply("已击落")
     await delete_member_messages(cli, chat_id, target_user_id, rm.id)
-    await delete_messages(cli, msg.chat.id, [msg.id, m.id])
+    message_ids = [msg.id]
+    if m:
+        message_ids.append(m.id)
+    await delete_messages(cli, msg.chat.id, message_ids)

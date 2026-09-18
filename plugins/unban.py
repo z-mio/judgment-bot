@@ -10,6 +10,7 @@ from pyrogram.types import (
 
 from log import logger
 from plugins.helpers import get_md_chat_link, get_chat_link, member_is_admin
+from plugins.verify import clear_verify_failed
 
 
 @Client.on_message(filters.command("unban") & filters.group & filters.admin)
@@ -45,13 +46,15 @@ async def unban(cli: Client, msg: Message) -> None:
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
-
+    if not unban_user:
+        return
     try:
         target_id = unban_user.id
         if not target_id:
             raise ValueError("no id")
 
         await cli.unban_chat_member(chat_id, target_id)
+        await clear_verify_failed(chat_id, target_id)
 
         if unban_user.type != ChatType.PRIVATE:
             return

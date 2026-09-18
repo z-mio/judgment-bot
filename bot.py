@@ -19,22 +19,25 @@ class JudgmentBot(Client):
             api_hash=bs.api_hash,
             bot_token=bs.bot_token,
             plugins={"root": "plugins"},
-            proxy=bs.pyrogram_proxy,
+            proxy=bs.bot_proxy,
             parse_mode=enums.ParseMode.MARKDOWN,
             workdir=bs.sessions_path,
         )
 
-    async def start(self, **kwargs) -> None:
+    async def start(self, **kwargs) -> Client:
         self.init_watchdog()
 
         if not await check_redis_connection():
             raise SystemExit(1)
         await super().start(**kwargs)
+        await self.set_menu()
+        return self
 
-    async def stop(self, *args, **kwargs) -> None:
+    async def stop(self, *args, **kwargs) -> Client:
         await cancel_all_verify_tasks()
         await rc.aclose()
         await super().stop(*args)
+        return self
 
     def init_watchdog(self) -> None:
         self.add_handler(ConnectHandler(on_connect))

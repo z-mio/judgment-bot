@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Annotated, Any
-from urllib.parse import urlparse
 import os
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -52,20 +51,6 @@ class BotSettings(BaseSettings):
     @classmethod
     def empty_string_to_none(cls, v: str | None = None) -> str | None:
         return v or None
-
-    @property
-    def pyrogram_proxy(self) -> dict[str, str | int | None] | None:
-        if not self.bot_proxy:
-            return None
-
-        parsed = urlparse(self.bot_proxy)
-        return {
-            "scheme": parsed.scheme,
-            "hostname": parsed.hostname,
-            "port": parsed.port,
-            "username": parsed.username,
-            "password": parsed.password,
-        }
 
 
 class WatchdogSettings(BaseSettings):
