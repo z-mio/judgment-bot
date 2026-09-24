@@ -390,8 +390,8 @@ async def send_start_verify_message(client: Client, context: VerifyContext) -> N
         return
     user_link = get_md_chat_link(context.member.user)
     text = (
-        f"**击点前提勿请**, 证验行进 😀 击点时 😀 成变 🥵 ,后秒 **{wait_seconds}** "
-        f"在请 {user_link}\n\n"
+        f"{user_link} 请在 **{wait_seconds}** 秒后, 待 🥵 变成 😀 时点击 😀 进行验证, "
+        f"**请勿提前点击!**\n\n"
         f"{user_link} Please wait **{wait_seconds}** seconds, "
         f"then click 😀 to verify once 🥵 changes to 😀. "
         f"**Do not click early!**"
@@ -448,7 +448,7 @@ async def refresh_verify_message(client: Client, session: VerifySession) -> None
         return
     user_link = get_md_chat_link(context.member.user)
     text = (
-        f"证验行进 😀 击点内秒 **{VERIFY_TIMEOUT_SECONDS}** 在请 {user_link}\n\n"
+        f"{user_link} 请在 **{VERIFY_TIMEOUT_SECONDS}** 秒内点击 😀 进行验证\n\n"
         f"{user_link} Please complete verification by clicking 😀 within "
         f"**{VERIFY_TIMEOUT_SECONDS}** seconds"
     )
