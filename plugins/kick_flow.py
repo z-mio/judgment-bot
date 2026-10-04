@@ -21,12 +21,21 @@ from plugins.helpers import (
     member_is_admin,
     delete_member_messages,
 )
-from services.kick_cooldown_manager import kick_cooldown
+from services.kick_cooldown_manager import format_seconds, kick_cooldown
 
 logger = logger.bind(name="Kick")
 
 LEAST_JOINED_DAYS = 30
 TARGET_JOINED_DAYS = 30
+
+# 入群天数门槛 -> 冷却秒数, 从高到低匹配, 入群越久冷却越短
+KICK_COOLDOWN_TIERS: tuple[tuple[int, int], ...] = (
+    (90, 60),
+    (60, 30 * 60),
+    (30, 60 * 60),
+)
+# 未命中任何档位时兜底(正常流程在 LEAST_JOINED_DAYS 处已被拦截)
+DEFAULT_KICK_COOLDOWN_SECONDS = 60 * 60
 
 
 @dataclass(slots=True)
@@ -74,6 +83,14 @@ def joined_days(joined_date: datetime | None) -> int:
         return 114514
     now = datetime.now(joined_date.tzinfo) if joined_date.tzinfo else datetime.now()
     return (now - joined_date).days
+
+
+def get_kick_cooldown_seconds(action_days: int) -> int:
+    """按发起人入群天数取冷却时长: 入群越久, 冷却越短"""
+    for least_days, cooldown_seconds in KICK_COOLDOWN_TIERS:
+        if action_days >= least_days:
+            return cooldown_seconds
+    return DEFAULT_KICK_COOLDOWN_SECONDS
 
 
 async def reply_and_delete(cli: Client, msg: Message, chat_id: int, text: str) -> None:
@@ -175,7 +192,10 @@ async def member_kick_button(msg: Message) -> None:
         )
         return
 
-    if not await start_kick_cooldown(msg, context.chat_id, context.action_user.id):
+    cooldown_seconds = get_kick_cooldown_seconds(action_days)
+    if not await start_kick_cooldown(
+        msg, context.chat_id, context.action_user.id, cooldown_seconds
+    ):
         return
 
     await send_member_kick_confirm(msg, context.action_user.id, context.reply)
@@ -207,17 +227,24 @@ async def can_kick_target(msg: Message, chat: Chat, target_user_id: int) -> bool
     return True
 
 
-async def start_kick_cooldown(msg: Message, chat_id: int, action_user_id: int) -> bool:
+async def start_kick_cooldown(
+    msg: Message, chat_id: int, action_user_id: int, cooldown_seconds: int
+) -> bool:
     if await kick_cooldown.can_user_kick(chat_id, action_user_id):
-        await kick_cooldown.set_cooldown(chat_id, action_user_id)
+        await kick_cooldown.set_cooldown(chat_id, action_user_id, cooldown_seconds)
+        logger.debug(
+            f"已设置击落冷却: {format_seconds(cooldown_seconds)} | "
+            f"user_id={action_user_id} | chat_id={chat_id}"
+        )
         return True
 
     remaining_time = await kick_cooldown.get_remaining_time_formatted(
         chat_id, action_user_id
     )
     logger.info(
-        f"击落被拒: 冷却中 剩余 {remaining_time} | user_id={action_user_id} | "
-        f"chat_id={chat_id}"
+        f"击落被拒: 冷却中 剩余 {remaining_time} | "
+        f"本次冷却={format_seconds(cooldown_seconds)} | "
+        f"user_id={action_user_id} | chat_id={chat_id}"
     )
     await msg.reply(
         f"**冷却中... | 剩余: {remaining_time}**\n如有广告哥, 可喊其他群友帮忙砍一刀"

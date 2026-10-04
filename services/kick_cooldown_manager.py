@@ -1,6 +1,26 @@
 from services.redis_client import rc
 
 
+def format_seconds(seconds: int) -> str:
+    """格式化秒数为 `1`h`30`m`10`s 形式"""
+    if seconds <= 0:
+        return "`0`s"
+
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+
+    time_parts = []
+    if hours > 0:
+        time_parts.append(f"`{hours}`h")
+    if minutes > 0:
+        time_parts.append(f"`{minutes}`m")
+    if secs > 0 or not time_parts:
+        time_parts.append(f"`{secs}`s")
+
+    return "".join(time_parts)
+
+
 class KickCooldownManager:
     def __init__(self, cooldown_seconds: int = 3600):
         self.cooldown_seconds = cooldown_seconds
@@ -16,10 +36,12 @@ class KickCooldownManager:
         exists = await rc.exists(key)
         return not exists
 
-    async def set_cooldown(self, chat_id: int, user_id: int) -> None:
-        """设置用户kick冷却时间"""
+    async def set_cooldown(
+        self, chat_id: int, user_id: int, seconds: int | None = None
+    ) -> None:
+        """设置用户kick冷却时间, 不传 seconds 时使用默认冷却"""
         key = self._get_key(chat_id, user_id)
-        await rc.set(key, "1", ex=self.cooldown_seconds)
+        await rc.set(key, "1", ex=self.cooldown_seconds if seconds is None else seconds)
 
     async def clear_cooldown(self, chat_id: int, user_id: int) -> bool:
         """清除用户kick冷却时间"""
@@ -42,19 +64,7 @@ class KickCooldownManager:
         if remaining <= 0:
             return None
 
-        hours = remaining // 3600
-        minutes = (remaining % 3600) // 60
-        seconds = remaining % 60
-
-        time_parts = []
-        if hours > 0:
-            time_parts.append(f"`{hours}`h")
-        if minutes > 0:
-            time_parts.append(f"`{minutes}`m")
-        if seconds > 0 or not time_parts:
-            time_parts.append(f"`{seconds}`s")
-
-        return "".join(time_parts)
+        return format_seconds(remaining)
 
 
 kick_cooldown = KickCooldownManager()
