@@ -39,20 +39,29 @@ async def delete_service_message(_: Client, msg: Message) -> None:
 
 
 @Client.on_message(filters.group & filters.admin & verify_failed_member)
-async def delete_verify_failed_message(_: Client, msg: Message) -> None:
+async def delete_verify_failed_message(cli: Client, msg: Message) -> None:
     if not msg.chat or msg.chat.id is None or not msg.from_user:
         return
 
     try:
         await msg.delete()
+        logger.info(
+            f"已删除验证失败用户的消息: {msg.from_user.full_name} | "
+            f"user_id={msg.from_user.id} | chat_id={msg.chat.id} | message_id={msg.id}"
+        )
     except Exception:
         logger.exception(
             f"删除验证失败用户的消息失败: user_id={msg.from_user.id} | "
             f"chat_id={msg.chat.id} | message_id={msg.id}"
         )
-        return
 
-    logger.info(
-        f"已删除验证失败用户的消息: {msg.from_user.full_name} | "
-        f"user_id={msg.from_user.id} | chat_id={msg.chat.id} | message_id={msg.id}"
-    )
+    try:
+        await cli.ban_chat_member(msg.chat.id, msg.from_user.id)
+        logger.info(
+            f"击落验证失败用户完成: target_user_id={msg.from_user.id} | "
+            f"target={msg.from_user.full_name} | chat_id={msg.chat.id}"
+        )
+    except Exception:
+        logger.exception(
+            f"击落验证失败用户失败: target_user_id={msg.from_user.id} | chat_id={msg.chat.id}"
+        )
