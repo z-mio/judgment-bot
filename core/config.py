@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 import os
 from pydantic import AliasChoices, Field, field_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class BotSettings(BaseSettings):
@@ -12,7 +12,6 @@ class BotSettings(BaseSettings):
         extra="ignore",
     )
 
-    admins: Annotated[list[int], NoDecode]
     api_id: int
     api_hash: str
     bot_token: str
@@ -35,17 +34,6 @@ class BotSettings(BaseSettings):
     @property
     def bot_session_name(self) -> str:
         return f"bot_{self.bot_token.split(':')[0]}"
-
-    @field_validator("admins", mode="before")
-    @classmethod
-    def parse_admins(cls, v: Any) -> Any:
-        if isinstance(v, list):
-            return [int(x) if not isinstance(x, int) else x for x in v]
-        if isinstance(v, int):
-            return [v]
-        if isinstance(v, str):
-            return [int(x.strip()) for x in v.replace(" ", "").split(",") if x.strip()]
-        return v
 
     @field_validator("redis_password", "bot_proxy", mode="before")
     @classmethod

@@ -101,7 +101,6 @@ uv run bot.py
 | `API_ID` | Telegram API ID | **必填** |
 | `API_HASH` | Telegram API Hash | **必填** |
 | `BOT_TOKEN` | BotFather 给的 Bot Token | **必填** |
-| `ADMINS` | 管理员用户 ID, 多个用英文逗号分隔 | 空 |
 | `BOT_PROXY` | 代理地址, 海外服务器一般不用填 | 空 |
 | `REDIS_HOST` | Redis 地址 | `localhost` |
 | `REDIS_PORT` | Redis 端口 | `6379` |
