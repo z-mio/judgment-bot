@@ -1,7 +1,7 @@
 [project]
 name = "judgment-bot"
 version = "0.1.0"
-description = "Add your description here"
+description = "Telegram 入群验证 Bot"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
