@@ -1,6 +1,6 @@
 from core.watchdog import on_connect, on_disconnect
 from plugins.helpers import COMMANDS
-from plugins.verify import cancel_all_verify_tasks
+from plugins.verify import cancel_all_verify_tasks, restore_verify_sessions
 from pyrogram import Client, enums
 
 from core.config import bs, ws
@@ -33,6 +33,7 @@ class JudgmentBot(Client):
             raise SystemExit(1)
         await super().start(**kwargs)
         await self.set_menu()
+        await restore_verify_sessions(self)
         return self
 
     async def stop(self, *args, **kwargs) -> Client:

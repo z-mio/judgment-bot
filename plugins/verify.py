@@ -3,6 +3,7 @@ import json
 import random
 import re
 import secrets
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -43,6 +44,8 @@ VERIFY_REFRESH_MIN_SECONDS = 5
 VERIFY_REFRESH_MAX_SECONDS = 10
 VERIFY_TIMEOUT_SECONDS = 30
 VERIFY_RETRY_SECONDS = 60
+# Safety net so a session never outlives a lost timer forever
+VERIFY_SESSION_TTL_SECONDS = 24 * 3600
 
 FinalState = Literal["passed", "failed", "timeout"]
 STATE_WAITING_CLICK = "waiting_click"
@@ -112,6 +115,9 @@ class VerifySession:
     rid: str
     verify_msg_id: int | None = None
     state: str = STATE_WAITING_CLICK
+    # Unix timestamps of the pending timers, used to resume them after a restart
+    refresh_at: int | None = None
+    timeout_at: int | None = None
 
     @classmethod
     def create(cls, chat_id: int, user_id: int) -> Self:
@@ -125,6 +131,8 @@ class VerifySession:
         verify_msg_id = data["verify_msg_id"]
         rid = data["rid"]
         state = data.get("state", STATE_WAITING_CLICK)
+        refresh_at = data.get("refresh_at")
+        timeout_at = data.get("timeout_at")
 
         if not isinstance(chat_id, int):
             raise ValueError("invalid chat_id")
@@ -136,6 +144,10 @@ class VerifySession:
             raise ValueError("invalid rid")
         if not isinstance(state, str):
             raise ValueError("invalid state")
+        if refresh_at is not None and not isinstance(refresh_at, int):
+            raise ValueError("invalid refresh_at")
+        if timeout_at is not None and not isinstance(timeout_at, int):
+            raise ValueError("invalid timeout_at")
 
         return cls(
             chat_id=chat_id,
@@ -143,6 +155,8 @@ class VerifySession:
             rid=rid,
             verify_msg_id=verify_msg_id,
             state=state,
+            refresh_at=refresh_at,
+            timeout_at=timeout_at,
         )
 
     @property
@@ -163,6 +177,8 @@ class VerifySession:
                 "verify_msg_id": self.current_verify_msg_id,
                 "rid": self.rid,
                 "state": self.state,
+                "refresh_at": self.refresh_at,
+                "timeout_at": self.timeout_at,
             },
             separators=(",", ":"),
         )
@@ -264,7 +280,9 @@ async def cancel_all_verify_tasks() -> None:
 
 async def save_session(session: VerifySession) -> None:
     async with rc.pipeline() as pipe:
-        pipe.set(session.validator_id, session.dumps())
+        pipe.set(
+            session.validator_id, session.dumps(), ex=VERIFY_SESSION_TTL_SECONDS
+        )
         pipe.sadd(f"verify_chat:{session.chat_id}", session.validator_id)
         await pipe.execute()
 
@@ -287,6 +305,19 @@ async def finish_session(session: VerifySession, final_state: FinalState) -> boo
             return False
 
         current.state = final_state
+        await save_session(current)
+        return True
+
+
+async def set_timeout_at(session: VerifySession, timeout_at: int) -> bool:
+    async with session_lock(session.validator_id):
+        current = await load_session(session.validator_id)
+        if not current:
+            return False
+        if current.rid != session.rid or current.state != STATE_WAITING_CLICK:
+            return False
+
+        current.timeout_at = timeout_at
         await save_session(current)
         return True
 
@@ -514,6 +545,7 @@ async def send_start_verify_message(client: Client, context: VerifyContext) -> N
         return
     session.verify_msg_id = verify_msg.id
     session.state = STATE_WAITING_CLICK
+    session.refresh_at = int(time.time()) + wait_seconds
     await save_session(session)
 
     logger.info(
@@ -582,7 +614,7 @@ async def refresh_verify_message(client: Client, session: VerifySession) -> None
         f"rid={session.rid}"
     )
 
-    if not await is_current_waiting(session):
+    if not await set_timeout_at(session, int(time.time()) + VERIFY_TIMEOUT_SECONDS):
         return
 
     schedule_verify_task(
@@ -591,6 +623,55 @@ async def refresh_verify_message(client: Client, session: VerifySession) -> None
         VERIFY_TIMEOUT_SECONDS,
         lambda: verify_timeout(client, session),
     )
+
+
+def resume_verify_session(client: Client, session: VerifySession, now: int) -> bool:
+    """Reschedule the pending timer of a session, return False if already expired"""
+    refresh_at = session.refresh_at
+    if (
+        session.timeout_at is None
+        and refresh_at is not None
+        and refresh_at + VERIFY_TIMEOUT_SECONDS > now
+    ):
+        # Prompt was not refreshed yet
+        schedule_verify_task(
+            session,
+            "refresh",
+            max(0, refresh_at - now),
+            lambda: refresh_verify_message(client, session),
+        )
+        return True
+
+    # Sessions saved without timestamps are treated as expired
+    delay = max(0, (session.timeout_at or now) - now)
+    schedule_verify_task(
+        session, "timeout", delay, lambda: verify_timeout(client, session)
+    )
+    return delay > 0
+
+
+async def restore_verify_sessions(client: Client) -> None:
+    """Resume pending verifications whose in-memory timers were lost on restart"""
+    now = int(time.time())
+    resumed = expired = 0
+    async for key in rc.scan_iter(match="[0-9a-f]" * 8, count=100):
+        try:
+            session = await load_session(key)
+        except Exception:
+            logger.warning(f"跳过无法解析的验证会话: key={key}")
+            continue
+        if not session or session.validator_id != key:
+            continue
+        if session.state != STATE_WAITING_CLICK:
+            continue
+
+        if resume_verify_session(client, session, now):
+            resumed += 1
+        else:
+            expired += 1
+
+    if resumed or expired:
+        logger.info(f"已恢复验证会话: 继续等待 {resumed} 个 | 按超时处理 {expired} 个")
 
 
 async def verify_buttons(
