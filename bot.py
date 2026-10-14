@@ -38,7 +38,7 @@ class JudgmentBot(Client):
 
     async def stop(self, *args, **kwargs) -> Client:
         logger.info("Bot 正在停止...")
-        # Tell the watchdog this disconnect is intentional, not a network drop
+        # 告知 watchdog 此次断开为主动停止, 并非网络异常
         ws.exit_flag = True
         await cancel_all_verify_tasks()
         await rc.aclose()

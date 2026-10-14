@@ -21,7 +21,10 @@ async def delete_guest_bot_message(_: Client, msg: Message) -> None:
                 f"message_id={msg.id}"
             )
     except Exception:
-        pass
+        logger.opt(exception=True).debug(
+            f"删除游客 Bot 消息失败: chat_id={msg.chat.id if msg.chat else None} | "
+            f"message_id={msg.id}"
+        )
 
 
 @Client.on_message(
@@ -35,7 +38,10 @@ async def delete_service_message(_: Client, msg: Message) -> None:
             f"message_id={msg.id}"
         )
     except Exception:
-        pass
+        logger.opt(exception=True).debug(
+            f"删除服务消息失败: chat_id={msg.chat.id if msg.chat else None} | "
+            f"message_id={msg.id}"
+        )
 
 
 @Client.on_message(filters.group & filters.admin & verify_failed_member)

@@ -5,6 +5,7 @@ import re
 import secrets
 import time
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal, Self, cast
@@ -28,6 +29,7 @@ from plugins.filters import new_members, start_filter
 from plugins.helpers import (
     build_start_link,
     decode_start_payload,
+    full_chat_permissions,
     get_chat_link,
     get_hash,
     get_md_chat_link,
@@ -44,7 +46,7 @@ VERIFY_REFRESH_MIN_SECONDS = 5
 VERIFY_REFRESH_MAX_SECONDS = 10
 VERIFY_TIMEOUT_SECONDS = 30
 VERIFY_RETRY_SECONDS = 60
-# Safety net so a session never outlives a lost timer forever
+# 兜底超时, 避免丢失定时任务后会话一直残留
 VERIFY_SESSION_TTL_SECONDS = 24 * 3600
 
 FinalState = Literal["passed", "failed", "timeout"]
@@ -115,7 +117,7 @@ class VerifySession:
     rid: str
     verify_msg_id: int | None = None
     state: str = STATE_WAITING_CLICK
-    # Unix timestamps of the pending timers, used to resume them after a restart
+    # 定时任务的 Unix 时间戳, 重启后可恢复
     refresh_at: int | None = None
     timeout_at: int | None = None
 
@@ -191,24 +193,6 @@ class VerifyContext:
     member: ChatMember
 
 
-def full_chat_permissions() -> ChatPermissions:
-    return ChatPermissions(
-        can_send_messages=True,
-        can_send_audios=True,
-        can_send_documents=True,
-        can_send_photos=True,
-        can_send_videos=True,
-        can_send_video_notes=True,
-        can_send_voice_notes=True,
-        can_send_polls=True,
-        can_send_other_messages=True,
-        can_add_web_page_previews=True,
-        can_react_to_messages=True,
-        can_edit_tag=True,
-        can_invite_users=True,
-    )
-
-
 def chat_display_name(chat: Chat | None) -> str:
     if not chat:
         return "未知群组"
@@ -278,12 +262,16 @@ async def cancel_all_verify_tasks() -> None:
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
+def verify_chat_key(chat_id: int) -> str:
+    return f"verify_chat:{chat_id}"
+
+
 async def save_session(session: VerifySession) -> None:
     async with rc.pipeline() as pipe:
         pipe.set(
             session.validator_id, session.dumps(), ex=VERIFY_SESSION_TTL_SECONDS
         )
-        pipe.sadd(f"verify_chat:{session.chat_id}", session.validator_id)
+        pipe.sadd(verify_chat_key(session.chat_id), session.validator_id)
         await pipe.execute()
 
 
@@ -296,7 +284,10 @@ async def load_session(validator_id: str) -> VerifySession | None:
     return VerifySession.loads(raw)
 
 
-async def finish_session(session: VerifySession, final_state: FinalState) -> bool:
+async def update_waiting_session(
+    session: VerifySession,
+    apply: Callable[[VerifySession], None],
+) -> bool:
     async with session_lock(session.validator_id):
         current = await load_session(session.validator_id)
         if not current:
@@ -304,22 +295,23 @@ async def finish_session(session: VerifySession, final_state: FinalState) -> boo
         if current.rid != session.rid or current.state != STATE_WAITING_CLICK:
             return False
 
-        current.state = final_state
+        apply(current)
         await save_session(current)
         return True
+
+
+async def finish_session(session: VerifySession, final_state: FinalState) -> bool:
+    def set_final_state(current: VerifySession) -> None:
+        current.state = final_state
+
+    return await update_waiting_session(session, set_final_state)
 
 
 async def set_timeout_at(session: VerifySession, timeout_at: int) -> bool:
-    async with session_lock(session.validator_id):
-        current = await load_session(session.validator_id)
-        if not current:
-            return False
-        if current.rid != session.rid or current.state != STATE_WAITING_CLICK:
-            return False
-
+    def set_timeout(current: VerifySession) -> None:
         current.timeout_at = timeout_at
-        await save_session(current)
-        return True
+
+    return await update_waiting_session(session, set_timeout)
 
 
 async def delete_session_if_current(session: VerifySession) -> None:
@@ -328,7 +320,7 @@ async def delete_session_if_current(session: VerifySession) -> None:
         if current and current.rid == session.rid:
             async with rc.pipeline() as pipe:
                 pipe.delete(session.validator_id)
-                pipe.srem(f"verify_chat:{session.chat_id}", session.validator_id)
+                pipe.srem(verify_chat_key(session.chat_id), session.validator_id)
                 await pipe.execute()
 
 
@@ -357,16 +349,20 @@ async def record_verify_result(chat_id: int, rid: str, passed: bool) -> None:
         )
 
 
+async def temp_ban(client: Client, chat_id: int, user_id: int) -> None:
+    await client.ban_chat_member(
+        chat_id,
+        user_id,
+        until_date=datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS),
+    )
+
+
 async def silent_kick(
     client: Client, chat_id: int, user_id: int, name: str
 ) -> None:
     await mark_verify_failed(chat_id, user_id)
     try:
-        await client.ban_chat_member(
-            chat_id,
-            user_id,
-            until_date=datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS),
-        )
+        await temp_ban(client, chat_id, user_id)
     except Exception:
         logger.exception(
             f"防轰炸静默踢出失败: user_id={user_id} | chat_id={chat_id}"
@@ -389,7 +385,7 @@ async def send_raid_notice(client: Client, chat_id: int) -> None:
 
 
 async def clear_pending_verifies(client: Client, chat_id: int) -> None:
-    index_key = f"verify_chat:{chat_id}"
+    index_key = verify_chat_key(chat_id)
     validator_ids = cast(set[str], await rc.smembers(index_key))
     cleared = 0
     for validator_id in validator_ids:
@@ -403,11 +399,7 @@ async def clear_pending_verifies(client: Client, chat_id: int) -> None:
         cancel_verify_tasks(session)
         await mark_verify_failed(session.chat_id, session.user_id)
         try:
-            await client.ban_chat_member(
-                session.chat_id,
-                session.user_id,
-                until_date=datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS),
-            )
+            await temp_ban(client, session.chat_id, session.user_id)
         except Exception:
             logger.exception(
                 f"防轰炸清理验证用户失败: user_id={session.user_id} | "
@@ -447,7 +439,7 @@ def final_state_from_value(value: str) -> FinalState | None:
     return None
 
 
-async def decode_callback_data(callback: CallbackQuery) -> CQData | None:
+def decode_callback_data(callback: CallbackQuery) -> CQData | None:
     if not callback.data:
         return None
     data_text = (
@@ -459,17 +451,15 @@ async def decode_callback_data(callback: CallbackQuery) -> CQData | None:
         return None
 
 
-async def decode_start_data(message: Message) -> StartData | None:
+def decode_start_data(message: Message) -> StartData | None:
     text = ""
     if message.text:
         parts = message.text.split(maxsplit=1)
         text = parts[1] if len(parts) > 1 else ""
 
     try:
-        try:
+        with suppress(Exception):
             text = decode_start_payload(text)
-        except Exception:
-            pass
         return StartData.parse(text)
     except Exception:
         return None
@@ -499,6 +489,8 @@ async def init_context(client: Client, session: VerifySession) -> VerifyContext 
 
 async def send_start_verify_message(client: Client, context: VerifyContext) -> None:
     session = context.session
+    if not context.member.user:
+        return
     await client.restrict_chat_member(
         session.chat_id, session.user_id, permissions=ChatPermissions()
     )
@@ -506,8 +498,6 @@ async def send_start_verify_message(client: Client, context: VerifyContext) -> N
     wait_seconds = random.randint(
         VERIFY_REFRESH_MIN_SECONDS, VERIFY_REFRESH_MAX_SECONDS
     )
-    if not context.member.user:
-        return
     user_link = get_md_chat_link(context.member.user)
     text = (
         f"{user_link} 请在 **{wait_seconds}** 秒后, 待 🥵 变成 😀 时点击 😀 进行验证, "
@@ -520,7 +510,7 @@ async def send_start_verify_message(client: Client, context: VerifyContext) -> N
         verify_msg = await client.send_message(
             chat_id=session.chat_id,
             text=text,
-            reply_markup=await verify_buttons(client, session, "one"),
+            reply_markup=verify_buttons(client, session, "one"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception:
@@ -530,11 +520,7 @@ async def send_start_verify_message(client: Client, context: VerifyContext) -> N
         )
         await mark_verify_failed(session.chat_id, session.user_id)
         try:
-            await client.ban_chat_member(
-                session.chat_id,
-                session.user_id,
-                until_date=datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS),
-            )
+            await temp_ban(client, session.chat_id, session.user_id)
         except Exception:
             logger.exception(
                 f"临时踢出验证提示发送失败用户失败: user_id={session.user_id} | "
@@ -556,7 +542,7 @@ async def send_start_verify_message(client: Client, context: VerifyContext) -> N
 
     try:
         deleted = await delete_member_messages(
-            client, session.chat_id, session.user_id, verify_msg.id, delay=0
+            client, session.chat_id, session.user_id, verify_msg.id
         )
         logger.debug(
             f"已清理验证用户历史消息: {deleted} 条 | user_id={session.user_id} | "
@@ -598,7 +584,7 @@ async def refresh_verify_message(client: Client, session: VerifySession) -> None
             chat_id=session.chat_id,
             message_id=session.current_verify_msg_id,
             text=text,
-            reply_markup=await verify_buttons(client, session, "two"),
+            reply_markup=verify_buttons(client, session, "two"),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception:
@@ -626,14 +612,14 @@ async def refresh_verify_message(client: Client, session: VerifySession) -> None
 
 
 def resume_verify_session(client: Client, session: VerifySession, now: int) -> bool:
-    """Reschedule the pending timer of a session, return False if already expired"""
+    """恢复会话定时任务, 已过期时返回 False"""
     refresh_at = session.refresh_at
     if (
         session.timeout_at is None
         and refresh_at is not None
         and refresh_at + VERIFY_TIMEOUT_SECONDS > now
     ):
-        # Prompt was not refreshed yet
+        # 验证提示尚未刷新
         schedule_verify_task(
             session,
             "refresh",
@@ -642,7 +628,7 @@ def resume_verify_session(client: Client, session: VerifySession, now: int) -> b
         )
         return True
 
-    # Sessions saved without timestamps are treated as expired
+    # 无时间戳的旧会话按已过期处理
     delay = max(0, (session.timeout_at or now) - now)
     schedule_verify_task(
         session, "timeout", delay, lambda: verify_timeout(client, session)
@@ -651,7 +637,7 @@ def resume_verify_session(client: Client, session: VerifySession, now: int) -> b
 
 
 async def restore_verify_sessions(client: Client) -> None:
-    """Resume pending verifications whose in-memory timers were lost on restart"""
+    """恢复重启后丢失定时任务的验证会话"""
     now = int(time.time())
     resumed = expired = 0
     async for key in rc.scan_iter(match="[0-9a-f]" * 8, count=100):
@@ -674,7 +660,7 @@ async def restore_verify_sessions(client: Client) -> None:
         logger.info(f"已恢复验证会话: 继续等待 {resumed} 个 | 按超时处理 {expired} 个")
 
 
-async def verify_buttons(
+def verify_buttons(
     client: Client, session: VerifySession, step: Literal["one", "two"]
 ) -> Ikm:
     buttons = [
@@ -691,7 +677,7 @@ async def verify_buttons(
     buttons.append(
         Ikb(
             text=text,
-            url=await build_start_link(
+            url=build_start_link(
                 client, StartData(session.validator_id, session.rid, "verify", value)
             ),
         )
@@ -735,10 +721,7 @@ async def verify_fail(client: Client, context: VerifyContext, message: Message) 
     session = context.session
     await record_verify_result(session.chat_id, session.rid, passed=False)
     await mark_verify_failed(session.chat_id, session.user_id)
-    until_date = datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS)
-    await client.ban_chat_member(
-        session.chat_id, session.user_id, until_date=until_date
-    )
+    await temp_ban(client, session.chat_id, session.user_id)
     await message.reply(
         f"**{get_md_chat_link(context.chat)} 验证失败**\n请 1 分钟后重试",
     )
@@ -763,10 +746,7 @@ async def verify_timeout(client: Client, session: VerifySession) -> None:
         return
 
     try:
-        until_date = datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS)
-        await client.ban_chat_member(
-            session.chat_id, session.user_id, until_date=until_date
-        )
+        await temp_ban(client, session.chat_id, session.user_id)
         await end_text(client, context, "验证超时, 已击落")
         logger.info(
             f"验证超时: {member_display_name(context.member)} | "
@@ -948,7 +928,7 @@ async def verify(client: Client, event: ChatMemberUpdated) -> None:
 
 @Client.on_callback_query(filters.regex(r"^@"))
 async def verify_callback(client: Client, callback: CallbackQuery) -> None:
-    data = await decode_callback_data(callback)
+    data = decode_callback_data(callback)
     if not data:
         logger.debug(f"忽略验证回调: 数据无法解析 | user_id={callback.from_user.id}")
         await callback.answer("验证已过期", show_alert=True)
@@ -1007,7 +987,7 @@ async def verify_callback(client: Client, callback: CallbackQuery) -> None:
 
 @Client.on_message(start_filter(".*"))
 async def start_handler(client: Client, message: Message) -> None:
-    data = await decode_start_data(message)
+    data = decode_start_data(message)
     if not data:
         await message.reply("验证已过期")
         message.stop_propagation()
