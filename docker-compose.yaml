@@ -6,9 +6,9 @@ services:
     command: >
       sh -c "
       if [ -n \"$$REDIS_PASSWORD\" ]; then
-        redis-server --requirepass \"$$REDIS_PASSWORD\"
+        redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes
       else
-        redis-server
+        redis-server --appendonly yes
       fi
       "
     volumes:

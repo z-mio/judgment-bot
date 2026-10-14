@@ -33,6 +33,7 @@ from plugins.helpers import (
     delete_member_messages,
 )
 from services.redis_client import rc
+from services.raid_guard_manager import raid_guard_manager
 from services.verify_fail_manager import verify_fail_manager
 
 logger = logger.bind(name="Verify")
@@ -262,7 +263,10 @@ async def cancel_all_verify_tasks() -> None:
 
 
 async def save_session(session: VerifySession) -> None:
-    await rc.set(session.validator_id, session.dumps())
+    async with rc.pipeline() as pipe:
+        pipe.set(session.validator_id, session.dumps())
+        pipe.sadd(f"verify_chat:{session.chat_id}", session.validator_id)
+        await pipe.execute()
 
 
 async def load_session(validator_id: str) -> VerifySession | None:
@@ -291,7 +295,10 @@ async def delete_session_if_current(session: VerifySession) -> None:
     async with session_lock(session.validator_id):
         current = await load_session(session.validator_id)
         if current and current.rid == session.rid:
-            await rc.delete(session.validator_id)
+            async with rc.pipeline() as pipe:
+                pipe.delete(session.validator_id)
+                pipe.srem(f"verify_chat:{session.chat_id}", session.validator_id)
+                await pipe.execute()
 
 
 async def is_current_waiting(session: VerifySession) -> bool:
@@ -308,6 +315,88 @@ async def mark_verify_failed(chat_id: int, user_id: int) -> None:
         logger.debug(f"已写入验证失败标记: user_id={user_id} | chat_id={chat_id}")
     except Exception:
         logger.exception(f"写入验证失败标记失败: user_id={user_id} | chat_id={chat_id}")
+
+
+async def record_verify_result(chat_id: int, rid: str, passed: bool) -> None:
+    try:
+        await raid_guard_manager.record_result(chat_id, rid, passed)
+    except Exception:
+        logger.exception(
+            f"记录验证结果失败: chat_id={chat_id} | rid={rid} | passed={passed}"
+        )
+
+
+async def silent_kick(
+    client: Client, chat_id: int, user_id: int, name: str
+) -> None:
+    await mark_verify_failed(chat_id, user_id)
+    try:
+        await client.ban_chat_member(
+            chat_id,
+            user_id,
+            until_date=datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS),
+        )
+    except Exception:
+        logger.exception(
+            f"防轰炸静默踢出失败: user_id={user_id} | chat_id={chat_id}"
+        )
+    logger.info(f"防轰炸静默踢出: {name} | user_id={user_id} | chat_id={chat_id}")
+
+
+async def send_raid_notice(client: Client, chat_id: int) -> None:
+    try:
+        await client.send_message(
+            chat_id,
+            "**已开启防轰炸模式**\n"
+            "检测到异常入群, 期间新成员将被自动移出, 请稍后再加入\n\n"
+            "**Anti-raid mode enabled**\n"
+            "Unusual join activity detected, new members will be removed "
+            "automatically, please try joining again later",
+        )
+    except Exception:
+        logger.exception(f"发送防轰炸模式通知失败: chat_id={chat_id}")
+
+
+async def clear_pending_verifies(client: Client, chat_id: int) -> None:
+    index_key = f"verify_chat:{chat_id}"
+    validator_ids = cast(set[str], await rc.smembers(index_key))
+    cleared = 0
+    for validator_id in validator_ids:
+        session = await load_session(validator_id)
+        if not session:
+            await rc.srem(index_key, validator_id)
+            continue
+        if not await finish_session(session, STATE_TIMEOUT):
+            continue
+
+        cancel_verify_tasks(session)
+        await mark_verify_failed(session.chat_id, session.user_id)
+        try:
+            await client.ban_chat_member(
+                session.chat_id,
+                session.user_id,
+                until_date=datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS),
+            )
+        except Exception:
+            logger.exception(
+                f"防轰炸清理验证用户失败: user_id={session.user_id} | "
+                f"chat_id={session.chat_id}"
+            )
+        if session.verify_msg_id:
+            try:
+                await client.delete_messages(
+                    session.chat_id, session.verify_msg_id
+                )
+            except Exception:
+                logger.exception(
+                    f"删除防轰炸验证消息失败: user_id={session.user_id} | "
+                    f"chat_id={session.chat_id}"
+                )
+        await verify_end(session)
+        cleared += 1
+    logger.info(
+        f"防轰炸清场: 已静默处理 {cleared} 个进行中的验证 | chat_id={chat_id}"
+    )
 
 
 async def clear_verify_failed(chat_id: int, user_id: int) -> None:
@@ -539,6 +628,7 @@ async def verify_buttons(
 
 async def verify_pass(client: Client, context: VerifyContext, message: Message) -> None:
     session = context.session
+    await record_verify_result(session.chat_id, session.rid, passed=True)
     await clear_verify_failed(session.chat_id, session.user_id)
     await client.restrict_chat_member(
         session.chat_id,
@@ -562,6 +652,7 @@ async def verify_pass(client: Client, context: VerifyContext, message: Message) 
 
 async def verify_fail(client: Client, context: VerifyContext, message: Message) -> None:
     session = context.session
+    await record_verify_result(session.chat_id, session.rid, passed=False)
     await mark_verify_failed(session.chat_id, session.user_id)
     until_date = datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS)
     await client.ban_chat_member(
@@ -582,6 +673,7 @@ async def verify_timeout(client: Client, session: VerifySession) -> None:
     if not await finish_session(session, STATE_TIMEOUT):
         return
 
+    await record_verify_result(session.chat_id, session.rid, passed=False)
     await mark_verify_failed(session.chat_id, session.user_id)
 
     context = await init_context(client, session)
@@ -608,6 +700,7 @@ async def admin_verify_pass(
     client: Client, context: VerifyContext, callback: CallbackQuery
 ) -> None:
     session = context.session
+    await record_verify_result(session.chat_id, session.rid, passed=True)
     await clear_verify_failed(session.chat_id, session.user_id)
     await client.restrict_chat_member(
         session.chat_id,
@@ -631,6 +724,7 @@ async def admin_verify_fail(
     client: Client, context: VerifyContext, callback: CallbackQuery
 ) -> None:
     session = context.session
+    await record_verify_result(session.chat_id, session.rid, passed=False)
     await client.ban_chat_member(session.chat_id, session.user_id)
     await callback.answer("已永久踢出")
     await end_text(
@@ -740,7 +834,30 @@ async def verify(client: Client, event: ChatMemberUpdated) -> None:
     if not event.chat.id:
         return
 
-    session = VerifySession.create(event.chat.id, event.from_user.id)
+    chat_id = event.chat.id
+    new_chat_member = event.new_chat_member
+    if not new_chat_member:
+        return
+    user = new_chat_member.user
+    if not user:
+        return
+
+    try:
+        await raid_guard_manager.record_join(chat_id, user.id)
+        mode, newly = await raid_guard_manager.evaluate(chat_id)
+    except Exception:
+        logger.exception(
+            f"防轰炸状态检查失败: user_id={user.id} | chat_id={chat_id}"
+        )
+        mode, newly = None, False
+    if mode:
+        await silent_kick(client, chat_id, user.id, user.full_name or str(user.id))
+        if newly:
+            await send_raid_notice(client, chat_id)
+            await clear_pending_verifies(client, chat_id)
+        return
+
+    session = VerifySession.create(chat_id, user.id)
     context = await init_context(client, session)
     if not context:
         return
