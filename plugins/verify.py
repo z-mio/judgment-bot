@@ -268,9 +268,7 @@ def verify_chat_key(chat_id: int) -> str:
 
 async def save_session(session: VerifySession) -> None:
     async with rc.pipeline() as pipe:
-        pipe.set(
-            session.validator_id, session.dumps(), ex=VERIFY_SESSION_TTL_SECONDS
-        )
+        pipe.set(session.validator_id, session.dumps(), ex=VERIFY_SESSION_TTL_SECONDS)
         pipe.sadd(verify_chat_key(session.chat_id), session.validator_id)
         await pipe.execute()
 
@@ -357,16 +355,12 @@ async def temp_ban(client: Client, chat_id: int, user_id: int) -> None:
     )
 
 
-async def silent_kick(
-    client: Client, chat_id: int, user_id: int, name: str
-) -> None:
+async def silent_kick(client: Client, chat_id: int, user_id: int, name: str) -> None:
     await mark_verify_failed(chat_id, user_id)
     try:
         await temp_ban(client, chat_id, user_id)
     except Exception:
-        logger.exception(
-            f"防轰炸静默踢出失败: user_id={user_id} | chat_id={chat_id}"
-        )
+        logger.exception(f"防轰炸静默踢出失败: user_id={user_id} | chat_id={chat_id}")
     logger.info(f"防轰炸静默踢出: {name} | user_id={user_id} | chat_id={chat_id}")
 
 
@@ -407,9 +401,7 @@ async def clear_pending_verifies(client: Client, chat_id: int) -> None:
             )
         if session.verify_msg_id:
             try:
-                await client.delete_messages(
-                    session.chat_id, session.verify_msg_id
-                )
+                await client.delete_messages(session.chat_id, session.verify_msg_id)
             except Exception:
                 logger.exception(
                     f"删除防轰炸验证消息失败: user_id={session.user_id} | "
@@ -417,9 +409,7 @@ async def clear_pending_verifies(client: Client, chat_id: int) -> None:
                 )
         await verify_end(session)
         cleared += 1
-    logger.info(
-        f"防轰炸清场: 已静默处理 {cleared} 个进行中的验证 | chat_id={chat_id}"
-    )
+    logger.info(f"防轰炸清场: 已静默处理 {cleared} 个进行中的验证 | chat_id={chat_id}")
 
 
 async def clear_verify_failed(chat_id: int, user_id: int) -> None:
@@ -907,9 +897,7 @@ async def verify(client: Client, event: ChatMemberUpdated) -> None:
         await raid_guard_manager.record_join(chat_id, user.id)
         mode, newly = await raid_guard_manager.evaluate(chat_id)
     except Exception:
-        logger.exception(
-            f"防轰炸状态检查失败: user_id={user.id} | chat_id={chat_id}"
-        )
+        logger.exception(f"防轰炸状态检查失败: user_id={user.id} | chat_id={chat_id}")
         mode, newly = None, False
     if mode:
         await silent_kick(client, chat_id, user.id, user.full_name or str(user.id))

@@ -67,11 +67,7 @@ def full_chat_permissions() -> ChatPermissions:
 def is_user_or_anonymous_admin(msg: Message) -> bool:
     return bool(
         msg.from_user
-        or (
-            msg.chat
-            and msg.sender_chat
-            and msg.sender_chat.id == msg.chat.id
-        )
+        or (msg.chat and msg.sender_chat and msg.sender_chat.id == msg.chat.id)
     )
 
 

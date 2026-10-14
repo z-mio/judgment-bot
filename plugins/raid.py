@@ -33,8 +33,7 @@ async def raid(cli: Client, msg: Message) -> None:
     )
     if msg.from_user and not await member_is_admin(cli, chat_id, msg.from_user.id):
         logger.warning(
-            f"防轰炸操作被拒: 权限不足 | user_id={msg.from_user.id} | "
-            f"chat_id={chat_id}"
+            f"防轰炸操作被拒: 权限不足 | user_id={msg.from_user.id} | chat_id={chat_id}"
         )
         await reply_and_delete(cli, msg, chat_id, "权限不足")
         return
