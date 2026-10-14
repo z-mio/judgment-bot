@@ -104,7 +104,6 @@ uv run bot.py
 | `API_ID` | Telegram API ID | **Обязательно** |
 | `API_HASH` | Telegram API Hash | **Обязательно** |
 | `BOT_TOKEN` | Токен бота от BotFather | **Обязательно** |
-| `ADMINS` | ID администраторов через запятую | Пусто |
 | `BOT_PROXY` | Адрес прокси, на зарубежных серверах обычно не нужен | Пусто |
 | `REDIS_HOST` | Хост Redis | `localhost` |
 | `REDIS_PORT` | Порт Redis | `6379` |
