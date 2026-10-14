@@ -3,7 +3,7 @@ from plugins.helpers import COMMANDS
 from plugins.verify import cancel_all_verify_tasks
 from pyrogram import Client, enums
 
-from core.config import bs
+from core.config import bs, ws
 from log import logger, setup_logging
 from pyrogram.handlers import ConnectHandler, DisconnectHandler
 from pyrogram.types import BotCommand
@@ -37,6 +37,8 @@ class JudgmentBot(Client):
 
     async def stop(self, *args, **kwargs) -> Client:
         logger.info("Bot 正在停止...")
+        # Tell the watchdog this disconnect is intentional, not a network drop
+        ws.exit_flag = True
         await cancel_all_verify_tasks()
         await rc.aclose()
         await super().stop(*args)
