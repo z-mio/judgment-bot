@@ -13,6 +13,7 @@ logger = logger.bind(name="Helper")
 COMMANDS = {
     "kick": "封禁用户/频道",
     "unban": "解封用户/频道",
+    "raid": "防轰炸模式",
     "start": "开始",
     "help": "帮助",
 }
