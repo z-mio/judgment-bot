@@ -396,12 +396,31 @@ async def send_start_verify_message(client: Client, context: VerifyContext) -> N
         f"then click 😀 to verify once 🥵 changes to 😀. "
         f"**Do not click early!**"
     )
-    verify_msg = await client.send_message(
-        chat_id=session.chat_id,
-        text=text,
-        reply_markup=await verify_buttons(client, session, "one"),
-        link_preview_options=LinkPreviewOptions(is_disabled=True),
-    )
+    try:
+        verify_msg = await client.send_message(
+            chat_id=session.chat_id,
+            text=text,
+            reply_markup=await verify_buttons(client, session, "one"),
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception:
+        logger.exception(
+            f"发送验证提示失败: user_id={session.user_id} | "
+            f"chat_id={session.chat_id} | 已临时踢出并标记"
+        )
+        await mark_verify_failed(session.chat_id, session.user_id)
+        try:
+            await client.ban_chat_member(
+                session.chat_id,
+                session.user_id,
+                until_date=datetime.now() + timedelta(seconds=VERIFY_RETRY_SECONDS),
+            )
+        except Exception:
+            logger.exception(
+                f"临时踢出验证提示发送失败用户失败: user_id={session.user_id} | "
+                f"chat_id={session.chat_id}"
+            )
+        return
     if not verify_msg:
         return
     session.verify_msg_id = verify_msg.id
@@ -466,7 +485,7 @@ async def refresh_verify_message(client: Client, session: VerifySession) -> None
             f"刷新验证提示失败: user_id={session.user_id} | chat_id={session.chat_id} | "
             f"rid={session.rid}"
         )
-        await verify_end(session)
+        await verify_timeout(client, session)
         return
 
     logger.debug(
@@ -630,6 +649,7 @@ async def end_text(client: Client, context: VerifyContext, text: str) -> None:
     session = context.session
     if not context.member.user:
         return
+    edited = False
     try:
         await client.edit_message_text(
             chat_id=session.chat_id,
@@ -637,11 +657,20 @@ async def end_text(client: Client, context: VerifyContext, text: str) -> None:
             text=f"{get_md_chat_link(context.member.user)} {text}",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        await asyncio.sleep(3)
-        await client.delete_messages(session.chat_id, session.current_verify_msg_id)
+        edited = True
     except Exception:
         logger.exception(
             f"更新验证结果消息失败: user_id={session.user_id} | chat_id={session.chat_id}"
+        )
+
+    if edited:
+        await asyncio.sleep(3)
+
+    try:
+        await client.delete_messages(session.chat_id, session.current_verify_msg_id)
+    except Exception:
+        logger.exception(
+            f"删除验证消息失败: user_id={session.user_id} | chat_id={session.chat_id}"
         )
 
 
