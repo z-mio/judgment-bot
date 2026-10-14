@@ -2,7 +2,11 @@ from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, Message
 
 from log import logger
-from plugins.helpers import member_is_admin
+from plugins.helpers import (
+    is_user_or_anonymous_admin,
+    member_is_admin,
+    reply_and_delete,
+)
 from plugins.kick_flow import (
     admin_kick,
     ban_channel,
@@ -11,7 +15,6 @@ from plugins.kick_flow import (
     member_kick,
     member_kick_button,
     parse_member_kick_data,
-    reply_and_delete,
 )
 
 logger = logger.bind(name="Kick")
@@ -22,7 +25,7 @@ async def kick(cli: Client, msg: Message) -> None:
     if not msg.chat or msg.chat.id is None:
         return
     # 匿名管理员: from_user 为 None, sender_chat 为群组本身
-    if not msg.from_user and (not msg.sender_chat or msg.sender_chat.id != msg.chat.id):
+    if not is_user_or_anonymous_admin(msg):
         return
 
     actor = msg.from_user.id if msg.from_user else "匿名管理员"

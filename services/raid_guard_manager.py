@@ -70,26 +70,19 @@ class RaidGuardManager:
 
     async def stats(self, chat_id: int) -> RaidStats:
         now = time.time()
+        results_key = self._results_key(chat_id)
         async with rc.pipeline() as pipe:
             pipe.zcount(self._joins_key(chat_id), now - WINDOW_SECONDS, "+inf")
-            pipe.zcount(
-                self._joins_key(chat_id), now - BURST_WINDOW_SECONDS, "+inf"
-            )
-            pipe.zcount(self._results_key(chat_id), now - WINDOW_SECONDS, "+inf")
+            pipe.zcount(self._joins_key(chat_id), now - BURST_WINDOW_SECONDS, "+inf")
+            pipe.zrangebyscore(results_key, now - WINDOW_SECONDS, "+inf")
             counts = await pipe.execute()
-        result_members = cast(
-            list[str],
-            await rc.zrangebyscore(
-                self._results_key(chat_id), now - WINDOW_SECONDS, "+inf"
-            ),
-        )
-        passed = len(
-            [member for member in result_members if member.endswith(":pass")]
-        )
+        result_members = cast(list[str], counts[2])
+        passed = len([member for member in result_members if member.endswith(":pass")])
+        results = len(result_members)
         return RaidStats(
             joins=int(counts[0]),
             burst_joins=int(counts[1]),
-            results=int(counts[2]),
+            results=results,
             passed=passed,
         )
 

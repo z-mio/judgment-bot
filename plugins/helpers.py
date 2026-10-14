@@ -4,9 +4,9 @@ import hashlib
 
 from pyrogram import Client
 from pyrogram.enums import ChatMemberStatus
+from pyrogram.types import Chat, ChatPermissions, Message, User
 
 from log import logger
-from pyrogram.types import User, Chat
 
 logger = logger.bind(name="Helper")
 
@@ -46,6 +46,31 @@ def get_chat_link(chat: Chat) -> str | None:
     return None
 
 
+def full_chat_permissions() -> ChatPermissions:
+    return ChatPermissions(
+        can_send_messages=True,
+        can_send_audios=True,
+        can_send_documents=True,
+        can_send_photos=True,
+        can_send_videos=True,
+        can_send_video_notes=True,
+        can_send_voice_notes=True,
+        can_send_polls=True,
+        can_send_other_messages=True,
+        can_add_web_page_previews=True,
+        can_react_to_messages=True,
+        can_edit_tag=True,
+        can_invite_users=True,
+    )
+
+
+def is_user_or_anonymous_admin(msg: Message) -> bool:
+    return bool(
+        msg.from_user
+        or (msg.chat and msg.sender_chat and msg.sender_chat.id == msg.chat.id)
+    )
+
+
 async def member_is_admin(cli: Client, chat_id: int, user_id: int) -> bool:
     try:
         member = await cli.get_chat_member(chat_id, user_id)
@@ -68,8 +93,6 @@ async def delete_messages(
         ids = list(dict.fromkeys(message_ids))
         for index in range(0, len(ids), 100):
             chunk = ids[index : index + 100]
-            if not chunk:
-                continue
             try:
                 await cli.delete_messages(chat_id, chunk)
             except Exception:
@@ -88,12 +111,20 @@ async def delete_messages(
         logger.exception(f"删除消息流程失败: chat_id={chat_id} | ids={message_ids}")
 
 
+async def reply_and_delete(cli: Client, msg: Message, chat_id: int, text: str) -> None:
+    reply = await msg.reply(text)
+    message_ids = [msg.id]
+    if reply:
+        message_ids.append(reply.id)
+    await delete_messages(cli, chat_id, message_ids)
+
+
 def decode_start_payload(value: str) -> str:
     padding = "=" * (-len(value) % 4)
     return base64.urlsafe_b64decode(f"{value}{padding}").decode()
 
 
-async def build_start_link(cli: Client, value: object) -> str:
+def build_start_link(cli: Client, value: object) -> str:
     username = cli.me.username if cli.me else ""
     if not username:
         raise ValueError("没有 username")
@@ -107,13 +138,10 @@ async def delete_member_messages(
     user_id: int,
     msg_id: int,
     limit: int = 100,
-    delay: int = 0,
 ) -> int:
     """
     删除最近 100 条消息中该用户发送的消息, 返回删除条数
     """
-    if delay:
-        await asyncio.sleep(delay)
     msgs = await cli.get_messages(
         chat_id,
         message_ids=list(

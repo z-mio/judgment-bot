@@ -4,11 +4,15 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 
 from log import logger
-from plugins.helpers import delete_messages, member_is_admin
-from plugins.kick_flow import reply_and_delete
+from plugins.helpers import (
+    delete_messages,
+    is_user_or_anonymous_admin,
+    member_is_admin,
+    reply_and_delete,
+)
 from plugins.verify import clear_pending_verifies, send_raid_notice
-from services.kick_cooldown_manager import format_seconds
 from services.raid_guard_manager import raid_guard_manager
+from utils.formatting import format_seconds
 
 logger = logger.bind(name="Raid")
 
@@ -17,9 +21,7 @@ logger = logger.bind(name="Raid")
 async def raid(cli: Client, msg: Message) -> None:
     if not msg.chat or msg.chat.id is None:
         return
-    if not msg.from_user and (
-        not msg.sender_chat or msg.sender_chat.id != msg.chat.id
-    ):
+    if not is_user_or_anonymous_admin(msg):
         return
 
     chat_id = msg.chat.id
@@ -31,8 +33,7 @@ async def raid(cli: Client, msg: Message) -> None:
     )
     if msg.from_user and not await member_is_admin(cli, chat_id, msg.from_user.id):
         logger.warning(
-            f"防轰炸操作被拒: 权限不足 | user_id={msg.from_user.id} | "
-            f"chat_id={chat_id}"
+            f"防轰炸操作被拒: 权限不足 | user_id={msg.from_user.id} | chat_id={chat_id}"
         )
         await reply_and_delete(cli, msg, chat_id, "权限不足")
         return

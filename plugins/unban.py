@@ -5,11 +5,16 @@ from pyrogram.types import (
     InlineKeyboardMarkup as Ikm,
     LinkPreviewOptions,
     Message,
-    ChatPermissions,
 )
 
 from log import logger
-from plugins.helpers import get_md_chat_link, get_chat_link, member_is_admin
+from plugins.helpers import (
+    full_chat_permissions,
+    get_chat_link,
+    get_md_chat_link,
+    is_user_or_anonymous_admin,
+    member_is_admin,
+)
 from plugins.verify import clear_verify_failed
 
 logger = logger.bind(name="Unban")
@@ -21,7 +26,7 @@ async def unban(cli: Client, msg: Message) -> None:
     if not msg.chat or msg.chat.id is None:
         return
     # 匿名管理员: from_user 为 None, sender_chat 为群组本身
-    if not msg.from_user and (not msg.sender_chat or msg.sender_chat.id != msg.chat.id):
+    if not is_user_or_anonymous_admin(msg):
         return
 
     chat_id = msg.chat.id
@@ -75,21 +80,7 @@ async def unban(cli: Client, msg: Message) -> None:
             await cli.restrict_chat_member(
                 chat_id,
                 target_id,
-                permissions=ChatPermissions(
-                    can_send_messages=True,
-                    can_send_audios=True,
-                    can_send_documents=True,
-                    can_send_photos=True,
-                    can_send_videos=True,
-                    can_send_video_notes=True,
-                    can_send_voice_notes=True,
-                    can_send_polls=True,
-                    can_send_other_messages=True,
-                    can_add_web_page_previews=True,
-                    can_react_to_messages=True,
-                    can_edit_tag=True,
-                    can_invite_users=True,
-                ),
+                permissions=full_chat_permissions(),
             )
         except Exception:
             logger.exception(
