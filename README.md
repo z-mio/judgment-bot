@@ -1,133 +1,145 @@
+<div align="center">
+
 # 🛡️ Telegramの风纪委员
 
-一个简单实用的 Telegram 入群验证 Bot, 用于降低广告用户进群刷屏带来的管理压力
+**简单实用的 Telegram 入群验证 Bot**
 
-**实例:** [@Shirai_Kuroko_Bot](https://t.me/Shirai_Kuroko_Bot)
+[![Telegram](https://img.shields.io/badge/Telegram-@Shirai__Kuroko__Bot-26A5E4?logo=telegram&logoColor=white)](https://t.me/Shirai_Kuroko_Bot)
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Kurigram](https://img.shields.io/badge/Kurigram-MTProto-26A5E4?logo=telegram&logoColor=white)](https://github.com/KurimuzonAkuma/kurigram)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](docker-compose.yaml)
+[![License](https://img.shields.io/github/license/z-mio/judgment-bot)](LICENSE)
+
+**简体中文** · [English](README.en.md) · [日本語](README.ja.md) · [Русский](README.ru.md)
+
+</div>
 
 ---
 
-## ✨ 功能简介
+## ✨ 功能
 
-本项目主要解决两类问题:
+- 🧩 **入群验证**: 新成员先被禁言, 等 🥵 变成 😀 后点击完成验证; 超时或点错会被临时踢出 1 分钟, 管理员也可以点 ✅ / ❎ 手动处理
+- 🏷️ **失败标记**: 验证失败或超时的用户会被标记 30 天, 期间发的消息会被自动删除, 直到重新验证通过
+- 🔨 **群友协助击落**: 入群满 30 天的成员可以用 `/kick` 处理新进群的广告号, Bot 会封禁对方, 并清理最近 100 条消息里该用户发的内容
+- 🚨 **防轰炸模式**: 检测到异常入群时自动开启, 期间新成员会被静默踢出, 不再发验证消息刷屏
+- 🧹 **自动清理**: 自动删除入群 / 退群的服务消息和游客 Bot 的消息
+- 💾 **状态持久化**: 验证会话存在 Redis 里, Bot 重启后会继续未完成的验证
 
-### 1. 入群验证
+## 📖 指令
 
-- 对新入群用户进行基础验证
-- 用简单验证拦截机器人广告号
-- 验证失败或超时的用户会被标记 30 天, 期间其发送的消息会被自动删除, 直到验证通过
+| 指令 | 使用者 | 说明 |
+| --- | --- | --- |
+| `/kick` | 群友 / 管理员 | 回复广告消息使用, 击落发送者; 回复频道消息时封禁该频道（仅管理员） |
+| `/unban <@用户名 \| ID>` | 管理员 | 解封用户, 并私聊通知对方 |
+| `/raid [on \| off]` | 管理员 | 查看防轰炸模式状态和统计 / 手动开启 / 关闭 |
+| `/start` · `/help` | 所有人 | 查看指令列表 |
 
-### 2. 群友协助处理广告
+<details>
+<summary><b>🔨 /kick 使用限制</b></summary>
 
-- 入群超过 30 天的普通成员, 可以使用 `/kick` 协助处理广告用户
-- `/kick` 有冷却时间, 按发起人入群天数分档, 入群越久冷却越短:
+<br>
 
-  | 入群天数 | 冷却时间 |
+- 发起人需要入群满 30 天, 目标需要入群未满 30 天
+- 冷却时间按发起人的入群天数分档, 入群越久冷却越短: 
+
+  | 发起人入群天数 | 冷却时间 |
   | --- | --- |
-  | ≥ 30 天 | 1 小时 |
-  | ≥ 60 天 | 30 分钟 |
   | ≥ 90 天 | 1 分钟 |
+  | ≥ 60 天 | 30 分钟 |
+  | ≥ 30 天 | 1 小时 |
 
-- `/kick` 只能用于处理入群未满 30 天的新成员
-- Bot 会删除最近 100 条消息中该用户发送的消息, 减少广告刷屏残留
+- 管理员不受以上限制, 可以直接击落
 
-### 3. 防轰炸模式
+</details>
 
-- 5 分钟内进群 ≥ 15 且已出结果 ≥ 10 人中通过率 ≤ 20%, 或 1 分钟内进群 ≥ 20 时自动开启
-- 开启后新进群用户会被静默临时踢出 1 分钟, 不发送验证消息, 并清理进行中的验证
-- 自动开启至少持续 10 分钟; 5 分钟内进群 < 5 时自动关闭
-- 启用时会在群内发送一条通知消息
-- 管理员可使用 `/raid` 查看状态, `/raid on` 手动开启 (不会自动关闭), `/raid off` 关闭
+<details>
+<summary><b>🚨 防轰炸模式规则</b></summary>
 
----
+<br>
 
-## 🤔 为什么这样设计?
+| | 条件 |
+| --- | --- |
+| **自动开启** | 5 分钟内进群 ≥ 15 人, 且已出结果的 ≥ 10 人中通过率 ≤ 20%; **或** 1 分钟内进群 ≥ 20 人 |
+| **开启期间** | 新成员被静默临时踢出 1 分钟, 并清理进行中的验证; 开启时群内发一条提示 |
+| **自动关闭** | 已开启 ≥ 10 分钟, 且 5 分钟内进群 < 5 人 |
+| **手动模式** | `/raid on` 开启后不会自动关闭, 需要 `/raid off` 手动关闭 |
 
-### 为什么不使用更严格的入群验证?
+</details>
 
-严格验证也很难拦住真人广告用户; 而机器人广告号通常用简单验证就能有效拦截
+## 🚀 快速开始
 
-### 为什么不做聊天内容审查?
+**1. 创建 Bot**: 通过 [@BotFather](https://t.me/BotFather) 创建 Bot, 拿到 `BOT_TOKEN`; 在 [my.telegram.org](https://my.telegram.org) 获取 `API_ID` 和 `API_HASH`
 
-聊天内容审查容易误伤正常群友, 尤其是一些玩梗, 抽象或语境复杂的消息
+**2. 拉进群并授权**: 把 Bot 设为管理员, 至少给 **封禁用户** 和 **删除消息** 两项权限
 
-### 广告用户很多怎么办?
-
-入群超过 30 天的普通成员可以使用 `/kick` 协助处理; Bot 会封禁目标用户, 并删除最近 100 条消息中该用户发送的消息
-
----
-
-## ⚙️ 使用前准备
-
-### 1. 创建 Bot
-
-在 Telegram 中通过 [@BotFather](https://t.me/BotFather) 创建 Bot, 并获取 `BOT_TOKEN`
-
-### 2. 配置群权限
-
-将 Bot 拉入群组后, 请授予以下权限:
-
-- 封禁用户
-- 删除消息
-
-否则 Bot 无法正常处理广告用户或删除广告消息
-
-### 3. 配置环境变量
-
-复制 `.env.example` 为 `.env`:
+**3. 配置并启动**
 
 ```shell
-cp .env.example .env
-```
-
-按需填写以下配置:
-
-| 名称             | 描述                                         | 默认值      |
-|------------------|----------------------------------------------|-------------|
-| `API_ID`         | Telegram API ID, 可在 my.telegram.org 获取   | 必填        |
-| `API_HASH`       | Telegram API Hash, 可在 my.telegram.org 获取 | 必填        |
-| `BOT_TOKEN`      | 在 BotFather 获取的 Bot Token                | 必填        |
-| `ADMINS`         | 管理员用户 ID, 多个用户用英文逗号分隔        | 空          |
-| `BOT_PROXY`      | Bot 代理地址, 海外服务器通常不需要填写       | 空          |
-| `REDIS_HOST`     | Redis 服务器地址                             | `localhost` |
-| `REDIS_PORT`     | Redis 服务器端口                             | `6379`      |
-| `REDIS_PASSWORD` | Redis 密码, 如果没有设置可以留空             | 空          |
-| `DEBUG`          | 调试模式, 设置为 `true` 启用调试日志         | `false`     |
-
-如果使用 `docker compose` 部署, 通常不需要手动填写 Redis 配置
-
----
-
-## 🚀 运行方式
-
-### Docker (推荐)
-
-在项目根目录运行:
-
-```shell
+cp .env.example .env   # 填写配置, 见下方说明
 docker compose up -d
 ```
 
-### 源码运行
+<details>
+<summary>不用 Docker? 从源码运行</summary>
 
-在项目根目录中执行:
+<br>
+
+需要 Python 3.12+、[uv](https://docs.astral.sh/uv/), 以及一个可用的 Redis
 
 ```shell
 uv sync
 uv run bot.py
 ```
 
----
+</details>
 
-## 📖 使用方式
+## ⚙️ 配置
 
-### 处理广告用户
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `API_ID` | Telegram API ID | **必填** |
+| `API_HASH` | Telegram API Hash | **必填** |
+| `BOT_TOKEN` | BotFather 给的 Bot Token | **必填** |
+| `ADMINS` | 管理员用户 ID, 多个用英文逗号分隔 | 空 |
+| `BOT_PROXY` | 代理地址, 海外服务器一般不用填 | 空 |
+| `REDIS_HOST` | Redis 地址 | `localhost` |
+| `REDIS_PORT` | Redis 端口 | `6379` |
+| `REDIS_PASSWORD` | Redis 密码 | 空 |
+| `DEBUG` | 设为 `true` 输出调试日志 | `false` |
 
-在群内对广告用户使用 `/kick` 指令
+> [!TIP]
+> 用 `docker compose` 部署时, Redis 配置会自动注入, 一般不需要改
 
-使用限制:
+## 💬 FAQ
 
-- 发起者必须是入群超过 30 天的普通成员
-- 每个用户每小时只能使用一次
-- 目标用户必须是入群未满 30 天的新成员
+<details>
+<summary><b>为什么不用更严格的入群验证?</b></summary>
 
-管理员可使用 `/raid` 查看防轰炸模式状态, 使用 `/raid on` 手动开启, 使用 `/raid off` 关闭
+<br>
+
+再严格的验证也拦不住真人广告号; 而机器人广告号, 用简单的验证就能有效拦住
+
+</details>
+
+<details>
+<summary><b>为什么不做聊天内容审查?</b></summary>
+
+<br>
+
+内容审查容易误伤正常群友, 尤其是玩梗、抽象或者语境复杂的消息
+
+</details>
+
+<details>
+<summary><b>广告号太多处理不过来怎么办?</b></summary>
+
+<br>
+
+入群满 30 天的群友可以用 `/kick` 帮忙处理; 遇到批量进群刷屏, 防轰炸模式会自动开启
+
+</details>
+
+## 📄 License
+
+[MIT](LICENSE) © 梓澪
