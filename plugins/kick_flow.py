@@ -230,8 +230,9 @@ async def can_kick_target(msg: Message, chat: Chat, target_user_id: int) -> bool
 async def start_kick_cooldown(
     msg: Message, chat_id: int, action_user_id: int, cooldown_seconds: int
 ) -> bool:
-    if await kick_cooldown.can_user_kick(chat_id, action_user_id):
-        await kick_cooldown.set_cooldown(chat_id, action_user_id, cooldown_seconds)
+    if await kick_cooldown.try_start_cooldown(
+        chat_id, action_user_id, cooldown_seconds
+    ):
         logger.debug(
             f"已设置击落冷却: {format_seconds(cooldown_seconds)} | "
             f"user_id={action_user_id} | chat_id={chat_id}"

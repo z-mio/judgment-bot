@@ -43,6 +43,14 @@ class KickCooldownManager:
         key = self._get_key(chat_id, user_id)
         await rc.set(key, "1", ex=self.cooldown_seconds if seconds is None else seconds)
 
+    async def try_start_cooldown(
+        self, chat_id: int, user_id: int, seconds: int | None = None
+    ) -> bool:
+        """原子地检查并设置冷却, 设置成功(此前不在冷却中)返回 True"""
+        key = self._get_key(chat_id, user_id)
+        ex = self.cooldown_seconds if seconds is None else seconds
+        return bool(await rc.set(key, "1", ex=ex, nx=True))
+
     async def clear_cooldown(self, chat_id: int, user_id: int) -> bool:
         """清除用户kick冷却时间"""
         key = self._get_key(chat_id, user_id)
