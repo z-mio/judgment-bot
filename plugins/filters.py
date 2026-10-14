@@ -5,15 +5,7 @@ from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import ChatMemberUpdated, Message
 
-from core.config import bs
 from services.verify_fail_manager import verify_fail_manager
-
-
-async def _is_admin(_: Any, __: Any, message: Message) -> bool:
-    return bool(message.from_user and message.from_user.id in bs.admins)
-
-
-is_admin = filters.create(_is_admin)
 
 
 async def _new_members(_: Any, __: Any, event: ChatMemberUpdated) -> bool:

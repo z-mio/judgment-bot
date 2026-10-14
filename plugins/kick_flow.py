@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Literal, cast
 
 from pyrogram import Client, enums
 from pyrogram.errors import UserNotParticipant
@@ -17,11 +17,13 @@ from pyrogram.types import (
 from log import logger
 from plugins.helpers import (
     delete_messages,
-    get_md_chat_link,
-    member_is_admin,
     delete_member_messages,
+    get_md_chat_link,
+    reply_and_delete,
+    member_is_admin,
 )
-from services.kick_cooldown_manager import format_seconds, kick_cooldown
+from services.kick_cooldown_manager import kick_cooldown
+from utils.formatting import format_seconds
 
 logger = logger.bind(name="Kick")
 
@@ -70,8 +72,11 @@ def get_kick_command_context(msg: Message) -> KickCommandContext | None:
 
 def parse_member_kick_data(data: str) -> MemberKickConfirmData:
     parts = dict(part.split("=", 1) for part in data.split(";"))
+    action = parts["mk"]
+    if action not in ("c", "x"):
+        raise ValueError("invalid member kick action")
     return MemberKickConfirmData(
-        action=parts["mk"],  # type: ignore[arg-type]
+        action=cast(Literal["c", "x"], action),
         action_user_id=int(parts["u"]),
         target_message_id=int(parts["m"]),
         target_user_id=int(parts["t"]),
@@ -91,14 +96,6 @@ def get_kick_cooldown_seconds(action_days: int) -> int:
         if action_days >= least_days:
             return cooldown_seconds
     return DEFAULT_KICK_COOLDOWN_SECONDS
-
-
-async def reply_and_delete(cli: Client, msg: Message, chat_id: int, text: str) -> None:
-    reply = await msg.reply(text)
-    message_ids = [msg.id]
-    if reply:
-        message_ids.append(reply.id)
-    await delete_messages(cli, chat_id, message_ids)
 
 
 async def assert_member_is_admin(
