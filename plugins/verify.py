@@ -976,9 +976,8 @@ async def verify_callback(client: Client, callback: CallbackQuery) -> None:
 @Client.on_message(start_filter(".*"))
 async def start_handler(client: Client, message: Message) -> None:
     data = decode_start_data(message)
+    # 不是验证链接的参数交给普通 /start 处理
     if not data:
-        await message.reply("验证已过期")
-        message.stop_propagation()
         return
 
     if not message.from_user:
