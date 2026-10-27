@@ -5,11 +5,6 @@ from pyrogram.types import LinkPreviewOptions, Message
 
 @Client.on_message(filters.command(["start", "help"]), group=1)
 async def start(_: Client, message: Message) -> None:
-    if message.text:
-        parts = message.text.split(maxsplit=1)
-        if parts and parts[0].split("@", 1)[0] == "/start" and len(parts) > 1:
-            return
-
     await message.reply(
         f"**呀哈喽!**\n\n"
         f"命令列表:\n{cmd_list_text()}\n\n"
