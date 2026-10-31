@@ -17,7 +17,9 @@ from utils.formatting import format_seconds
 logger = logger.bind(name="Raid")
 
 
-@Client.on_message(filters.command("raid") & filters.group & filters.admin)
+@Client.on_message(
+    ~filters.bot & filters.command("raid") & filters.group & filters.admin
+)
 async def raid(cli: Client, msg: Message) -> None:
     if not msg.chat or msg.chat.id is None:
         return

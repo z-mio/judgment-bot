@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Literal, cast
 
-from pyrogram import Client, enums
+from pyrogram import Client
 from pyrogram.errors import UserNotParticipant
 from pyrogram.types import (
     Chat,
@@ -18,7 +17,9 @@ from log import logger
 from plugins.helpers import (
     delete_messages,
     delete_member_messages,
+    send_ban_notice,
     get_md_chat_link,
+    joined_days,
     reply_and_delete,
     member_is_admin,
 )
@@ -82,12 +83,8 @@ def parse_member_kick_data(data: str) -> MemberKickConfirmData:
         target_user_id=int(parts["t"]),
     )
 
-
-def joined_days(joined_date: datetime | None) -> int:
-    if not joined_date:
-        return 114514
-    now = datetime.now(joined_date.tzinfo) if joined_date.tzinfo else datetime.now()
-    return (now - joined_date).days
+    (get_md_chat_link,)
+    (joined_days,)
 
 
 def get_kick_cooldown_seconds(action_days: int) -> int:
@@ -324,25 +321,12 @@ async def ban_member(cli: Client, chat_id: int, target_user_id: int) -> bool:
 async def notify_kicked_member(
     cli: Client, chat: Chat, target_user_id: int, action_user_link: str
 ) -> None:
-    admins = "\n".join(
-        [
-            f"• {get_md_chat_link(member.user)}"
-            async for member in chat.get_members(
-                filter=enums.ChatMembersFilter.ADMINISTRATORS
-            )
-            if member.user and not member.user.is_bot
-        ]
+    await send_ban_notice(
+        cli,
+        chat,
+        target_user_id,
+        f"**你已被 {action_user_link} 踢出 {get_md_chat_link(chat)}**",
     )
-
-    try:
-        await cli.send_message(
-            target_user_id,
-            f"**你已被 {action_user_link} 踢出 {get_md_chat_link(chat)}**\n如有异议请联系群组管理:\n"
-            f"{admins}",
-            link_preview_options=LinkPreviewOptions(is_disabled=True),
-        )
-    except Exception as e:
-        logger.warning(f"通知被击落用户失败: user_id={target_user_id} | {e}")
 
 
 async def member_kick(

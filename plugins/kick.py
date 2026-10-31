@@ -20,7 +20,9 @@ from plugins.kick_flow import (
 logger = logger.bind(name="Kick")
 
 
-@Client.on_message(filters.command("kick") & filters.group & filters.admin)
+@Client.on_message(
+    ~filters.bot & filters.command("kick") & filters.group & filters.admin
+)
 async def kick(cli: Client, msg: Message) -> None:
     if not msg.chat or msg.chat.id is None:
         return

@@ -20,7 +20,9 @@ from plugins.verify import clear_verify_failed
 logger = logger.bind(name="Unban")
 
 
-@Client.on_message(filters.command("unban") & filters.group & filters.admin)
+@Client.on_message(
+    ~filters.bot & filters.command("unban") & filters.group & filters.admin
+)
 async def unban(cli: Client, msg: Message) -> None:
 
     if not msg.chat or msg.chat.id is None:

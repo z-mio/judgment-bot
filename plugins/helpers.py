@@ -1,10 +1,18 @@
 import asyncio
 import base64
 import hashlib
+from collections.abc import Callable, Iterable
+from datetime import datetime
 
 from pyrogram import Client
-from pyrogram.enums import ChatMemberStatus
-from pyrogram.types import Chat, ChatPermissions, Message, User
+from pyrogram.enums import ChatMemberStatus, ChatMembersFilter
+from pyrogram.types import (
+    Chat,
+    ChatPermissions,
+    LinkPreviewOptions,
+    Message,
+    User,
+)
 
 from log import logger
 
@@ -84,6 +92,39 @@ async def member_is_admin(cli: Client, chat_id: int, user_id: int) -> bool:
     }
 
 
+def joined_days(joined_date: datetime | None) -> int:
+    if not joined_date:
+        return 114514
+    now = datetime.now(joined_date.tzinfo) if joined_date.tzinfo else datetime.now()
+    return (now - joined_date).days
+
+
+async def get_admin_mentions(chat: Chat) -> str:
+    """获取群管理员 Markdown 链接, 一行一个"""
+    return "\n".join(
+        [
+            f"• {get_md_chat_link(member.user)}"
+            async for member in chat.get_members(
+                filter=ChatMembersFilter.ADMINISTRATORS
+            )
+            if member.user and not member.user.is_bot
+        ]
+    )
+
+
+async def send_ban_notice(cli: Client, chat: Chat, user_id: int, reason: str) -> None:
+    """封禁后私信通知用户并附管理员联系方式, 失败仅记录日志"""
+    try:
+        admins = await get_admin_mentions(chat)
+        await cli.send_message(
+            user_id,
+            f"{reason}\n如有异议请联系群组管理:\n{admins}",
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception as e:
+        logger.warning(f"通知被封用户失败: user_id={user_id} | {e}")
+
+
 async def delete_messages(
     cli: Client, chat_id: int, message_ids: list[int], delay: int = 5
 ) -> None:
@@ -132,6 +173,19 @@ def build_start_link(cli: Client, value: object) -> str:
     return f"https://t.me/{username}?start={payload}"
 
 
+async def _delete_filtered_messages(
+    cli: Client,
+    chat_id: int,
+    message_ids: Iterable[int],
+    predicate: Callable[[Message], bool],
+) -> int:
+    msgs = await cli.get_messages(chat_id, message_ids=list(message_ids))
+    dms = [m.id for m in msgs if not m.empty and predicate(m)]
+    if dms:
+        await cli.delete_messages(chat_id, dms)
+    return len(dms)
+
+
 async def delete_member_messages(
     cli: Client,
     chat_id: int,
@@ -142,16 +196,29 @@ async def delete_member_messages(
     """
     删除最近 100 条消息中该用户发送的消息, 返回删除条数
     """
-    msgs = await cli.get_messages(
+    return await _delete_filtered_messages(
+        cli,
         chat_id,
-        message_ids=list(
-            range(max(msg_id - (limit // 2), 1), msg_id + (limit // 2) + 1)
-        ),
+        range(max(msg_id - limit // 2, 1), msg_id + limit // 2 + 1),
+        lambda m: bool(m.from_user and m.from_user.id == user_id),
     )
 
-    dms = [
-        m.id for m in msgs if not m.empty and m.from_user and m.from_user.id == user_id
-    ]
-    if dms:
-        await cli.delete_messages(chat_id, dms)
-    return len(dms)
+
+async def delete_bot_messages(
+    cli: Client,
+    chat_id: int,
+    msg_id: int,
+    limit: int = 30,
+    delay: int = 3,
+) -> int:
+    """
+    删除 msg_id 之后 limit 条范围内所有 bot 发送的消息, 返回删除条数
+    """
+    if delay:
+        await asyncio.sleep(delay)
+    return await _delete_filtered_messages(
+        cli,
+        chat_id,
+        range(msg_id + 1, msg_id + limit + 1),
+        lambda m: bool(m.from_user and m.from_user.is_bot),
+    )
