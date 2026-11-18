@@ -1,14 +1,11 @@
-from core.watchdog import on_connect, on_disconnect
 from plugins.helpers import COMMANDS
 from plugins.verify import cancel_all_verify_tasks, restore_verify_sessions
 from pyrogram import Client, enums
 
-from core.config import bs, ws
+from core.config import bs
 from log import logger, setup_logging
-from pyrogram.handlers import ConnectHandler, DisconnectHandler
 from pyrogram.types import BotCommand
 from services.redis_client import check_redis_connection, rc
-from utils.event_loop import setup_optimized_event_loop
 
 logger = logger.bind(name="Bot")
 
@@ -27,8 +24,6 @@ class JudgmentBot(Client):
         )
 
     async def start(self, **kwargs) -> Client:
-        self.init_watchdog()
-
         if not await check_redis_connection():
             raise SystemExit(1)
         await super().start(**kwargs)
@@ -38,17 +33,11 @@ class JudgmentBot(Client):
 
     async def stop(self, *args, **kwargs) -> Client:
         logger.info("Bot 正在停止...")
-        # 告知 watchdog 此次断开为主动停止, 并非网络异常
-        ws.exit_flag = True
         await cancel_all_verify_tasks()
         await rc.aclose()
         await super().stop(*args)
         await logger.complete()
         return self
-
-    def init_watchdog(self) -> None:
-        self.add_handler(ConnectHandler(on_connect))
-        self.add_handler(DisconnectHandler(on_disconnect))
 
     async def set_menu(self) -> None:
         commands = await self.get_bot_commands()
@@ -65,5 +54,4 @@ class JudgmentBot(Client):
 
 if __name__ == "__main__":
     setup_logging(debug=bs.debug)
-    setup_optimized_event_loop()
     JudgmentBot().run()
