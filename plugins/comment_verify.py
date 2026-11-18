@@ -297,8 +297,20 @@ async def verify_failed(client: Client, session: CommentSession, reason: str) ->
 
 async def verify_timeout(client: Client, session: CommentSession) -> None:
     current = await pop_session(session)
-    if current:
-        await verify_failed(client, current, "超时")
+    if not current:
+        return
+    try:
+        joined = not await is_non_member(client, current.chat_id, current.user_id)
+    except Exception:
+        joined = False
+    if joined:
+        logger.info(
+            f"评论者已入群, 跳过评论验证: user_id={current.user_id} | "
+            f"chat_id={current.chat_id}"
+        )
+        await delete_prompt(client, current)
+        return
+    await verify_failed(client, current, "超时")
 
 
 async def verify_passed(client: Client, session: CommentSession) -> None:
