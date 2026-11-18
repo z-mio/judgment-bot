@@ -880,7 +880,7 @@ async def progress_start(client: Client, message: Message, data: StartData) -> N
         await verify_end(session)
 
 
-@Client.on_chat_member_updated(new_members & filters.admin)
+@Client.on_chat_member_updated(new_members & filters.group & filters.admin)
 async def verify(client: Client, event: ChatMemberUpdated) -> None:
     if not event.chat.id:
         return
