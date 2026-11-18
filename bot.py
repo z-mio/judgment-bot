@@ -1,10 +1,14 @@
-from plugins.helpers import COMMANDS
-from plugins.verify import cancel_all_verify_tasks, restore_verify_sessions
 from pyrogram import Client, enums
+from pyrogram.types import BotCommand
 
 from core.config import bs
 from log import logger, setup_logging
-from pyrogram.types import BotCommand
+from plugins.comment_verify import (
+    cancel_all_comment_verify_tasks,
+    restore_comment_verify_sessions,
+)
+from plugins.helpers import COMMANDS
+from plugins.verify import cancel_all_verify_tasks, restore_verify_sessions
 from services.redis_client import check_redis_connection, rc
 
 logger = logger.bind(name="Bot")
@@ -29,11 +33,13 @@ class JudgmentBot(Client):
         await super().start(**kwargs)
         await self.set_menu()
         await restore_verify_sessions(self)
+        await restore_comment_verify_sessions(self)
         return self
 
     async def stop(self, *args, **kwargs) -> Client:
         logger.info("Bot 正在停止...")
         await cancel_all_verify_tasks()
+        await cancel_all_comment_verify_tasks()
         await rc.aclose()
         await super().stop(*args)
         await logger.complete()
