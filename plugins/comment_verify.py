@@ -4,6 +4,7 @@ import asyncio
 import json
 import secrets
 import time
+from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any, Self, cast
@@ -13,20 +14,25 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserNotParticipant
 from pyrogram.types import (
     CallbackQuery,
+    Chat,
     LinkPreviewOptions,
     Message,
     ReplyParameters,
     User,
 )
-from pyrogram.types import (
-    InlineKeyboardButton as Ikb,
-)
-from pyrogram.types import (
-    InlineKeyboardMarkup as Ikm,
-)
+from pyrogram.types import InlineKeyboardButton as Ikb
+from pyrogram.types import InlineKeyboardMarkup as Ikm
 
 from log import logger
-from plugins.helpers import get_hash, get_md_chat_link
+from plugins.helpers import (
+    as_text,
+    cancel_all_tasks,
+    cancel_task,
+    get_chat_link,
+    get_hash,
+    get_md_chat_link,
+    schedule_delayed,
+)
 from services.comment_guard_manager import comment_guard_manager
 from services.redis_client import rc
 
@@ -34,13 +40,15 @@ logger = logger.bind(name="CommentVerify")
 
 OPERATE = "comment"
 CALLBACK_PREFIX = "cv="
-VERIFY_SECONDS = 15
-FAIL_BAN_LIMIT = 2
+VERIFY_SECONDS = 30
+FAIL_BAN_LIMIT = 5
 SESSION_KEY_PREFIX = "comment_verify:"
 SESSION_TTL_SECONDS = 3600
+INVITE_KEY_PREFIX = "comment_invite:"
+INVITE_TTL_SECONDS = 86400 * 7
 
 TASKS: dict[str, asyncio.Task[None]] = {}
-LOCKS: dict[str, asyncio.Lock] = {}
+LOCKS: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 @dataclass(slots=True)
@@ -83,10 +91,6 @@ def session_key(sid: str) -> str:
     return f"{SESSION_KEY_PREFIX}{sid}"
 
 
-def session_lock(sid: str) -> asyncio.Lock:
-    return LOCKS.setdefault(sid, asyncio.Lock())
-
-
 async def save_session(session: CommentSession) -> None:
     await rc.set(session_key(session.sid), session.dumps(), ex=SESSION_TTL_SECONDS)
 
@@ -104,7 +108,7 @@ async def load_session(sid: str) -> CommentSession | None:
 
 async def pop_session(session: CommentSession) -> CommentSession | None:
     """结束会话, 只有当前会话的第一个结束者能拿到最新数据"""
-    async with session_lock(session.sid):
+    async with LOCKS[session.sid]:
         current = await load_session(session.sid)
         if not current or current.rid != session.rid:
             return None
@@ -122,38 +126,17 @@ def schedule_task(
     run_at: int,
     factory: Callable[[], Awaitable[None]],
 ) -> None:
-    key = task_key(session)
-    if old := TASKS.get(key):
-        old.cancel()
-
-    async def runner() -> None:
-        try:
-            await asyncio.sleep(max(0, run_at - time.time()))
-            await factory()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception(f"评论验证任务执行失败: task={key}")
-
-    task = asyncio.create_task(runner())
-    TASKS[key] = task
-    task.add_done_callback(
-        lambda t: TASKS.pop(key, None) if TASKS.get(key) is t else None
+    schedule_delayed(
+        TASKS, task_key(session), run_at - time.time(), factory, "评论验证任务"
     )
 
 
 def cancel_tasks(session: CommentSession) -> None:
-    task = TASKS.pop(task_key(session), None)
-    if task and task is not asyncio.current_task():
-        task.cancel()
+    cancel_task(TASKS, task_key(session), skip_current=True)
 
 
 async def cancel_all_comment_verify_tasks() -> None:
-    tasks = list(TASKS.values())
-    TASKS.clear()
-    for task in tasks:
-        task.cancel()
-    await asyncio.gather(*tasks, return_exceptions=True)
+    await cancel_all_tasks(TASKS)
 
 
 def schedule_session(client: Client, session: CommentSession) -> None:
@@ -206,20 +189,55 @@ def prompt_buttons(session: CommentSession) -> Ikm:
     )
 
 
-def prompt_text(user: User | None, session: CommentSession) -> str:
+async def join_link(client: Client, chat: Chat) -> str | None:
+    """群加入链接: 公开群用 t.me 链接, 私有群创建并缓存邀请链接"""
+    if link := get_chat_link(chat):
+        return link
+    if chat.id is None:
+        return None
+    key = f"{INVITE_KEY_PREFIX}{chat.id}"
+    cached = await rc.get(key)
+    if isinstance(cached, str):
+        return cached
+    try:
+        invite = await client.create_chat_invite_link(chat.id)
+    except Exception as e:
+        logger.warning(f"创建交流群邀请链接失败: chat_id={chat.id} | {e}")
+        return None
+    if not invite:
+        return None
+    await rc.set(key, invite.invite_link, ex=INVITE_TTL_SECONDS)
+    return invite.invite_link
+
+
+def user_link(user: User | None) -> str:
+    return f"{get_md_chat_link(user)} " if user else ""
+
+
+def prompt_text(
+    user: User | None, session: CommentSession, join_url: str | None
+) -> str:
     left = max(1, session.timeout_at - int(time.time()))
-    link = f"{get_md_chat_link(user)} " if user else ""
+    link = user_link(user)
+    join = f"[加入交流群]({join_url})" if join_url else "加入交流群"
+    join_en = f"[Join the group]({join_url})" if join_url else "Join the group"
     return (
-        f"{link}请在 **{left}** 秒内点击 😀 完成验证, 超时评论将被删除\n\n"
+        f"{link}请在 **{left}** 秒内点击 😀 完成验证, 超时评论将被删除\n"
+        f"💡 {join}后评论无需验证\n\n"
         f"{link}Click 😀 within **{left}** seconds, "
-        f"or your comment will be deleted"
+        f"or your comment will be deleted\n"
+        f"💡 {join_en} to comment without verification"
     )
 
 
 async def send_prompt(client: Client, msg: Message, session: CommentSession) -> None:
     sent = await client.send_message(
         session.chat_id,
-        prompt_text(msg.from_user, session),
+        prompt_text(
+            msg.from_user,
+            session,
+            await join_link(client, msg.chat) if msg.chat else None,
+        ),
         reply_parameters=ReplyParameters(message_id=msg.id),
         reply_markup=prompt_buttons(session),
         link_preview_options=LinkPreviewOptions(is_disabled=True),
@@ -241,7 +259,7 @@ async def end_prompt(client: Client, session: CommentSession, text: str) -> None
     if session.prompt_id is None:
         return
     user = await safe_get_user(client, session.user_id)
-    prefix = f"{get_md_chat_link(user)} " if user else ""
+    prefix = user_link(user)
     try:
         await client.edit_message_text(
             session.chat_id,
@@ -333,7 +351,7 @@ async def comment_verify(client: Client, msg: Message) -> None:
         return
 
     sid = session_id(chat_id, user.id)
-    async with session_lock(sid):
+    async with LOCKS[sid]:
         if session := await load_session(sid):
             session.msg_ids.append(msg.id)
             await save_session(session)
@@ -366,15 +384,13 @@ async def comment_verify(client: Client, msg: Message) -> None:
 
 @Client.on_callback_query(filters.regex(rf"^{CALLBACK_PREFIX}"))
 async def comment_verify_callback(client: Client, callback: CallbackQuery) -> None:
-    data = callback.data.decode() if isinstance(callback.data, bytes) else callback.data
-    parts = (data or "").removeprefix(CALLBACK_PREFIX).split(",")
-    if len(parts) != 3 or parts[2] != "pass":
-        await callback.answer("验证已过期", show_alert=True)
-        return
-    sid, rid, _ = parts
-
-    session = await load_session(sid)
-    if not session or session.rid != rid:
+    parts = as_text(callback.data).removeprefix(CALLBACK_PREFIX).split(",")
+    session = (
+        await load_session(parts[0])
+        if len(parts) == 3 and parts[2] == "pass"
+        else None
+    )
+    if not session or session.rid != parts[1]:
         await callback.answer("验证已过期", show_alert=True)
         return
     if callback.from_user.id != session.user_id:

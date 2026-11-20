@@ -1,18 +1,15 @@
+from dataclasses import dataclass
+
 from services.redis_client import rc
 
 
+@dataclass(slots=True)
 class CommentGuardManager:
     """未入群评论者的信任缓存与连续验证失败计数"""
 
-    def __init__(
-        self,
-        verified_ttl_seconds: int = 30 * 24 * 3600,
-        member_ttl_seconds: int = 24 * 3600,
-        fail_ttl_seconds: int = 30 * 24 * 3600,
-    ):
-        self.verified_ttl_seconds = verified_ttl_seconds
-        self.member_ttl_seconds = member_ttl_seconds
-        self.fail_ttl_seconds = fail_ttl_seconds
+    verified_ttl_seconds: int = 30 * 24 * 3600
+    member_ttl_seconds: int = 24 * 3600
+    fail_ttl_seconds: int = 30 * 24 * 3600
 
     @staticmethod
     def _trusted_key(chat_id: int, user_id: int) -> str:

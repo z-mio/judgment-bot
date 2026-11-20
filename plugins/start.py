@@ -14,4 +14,4 @@ async def start(_: Client, message: Message) -> None:
 
 
 def cmd_list_text() -> str:
-    return "\n".join([f"/{k} - {v}" for k, v in COMMANDS.items()])
+    return "\n".join(f"/{k} - {v}" for k, v in COMMANDS.items())

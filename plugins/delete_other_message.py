@@ -51,7 +51,8 @@ async def delete_guest_bot_message(cli: Client, msg: Message) -> None:
     try:
         notice = await cli.send_message(
             chat_id,
-            f"入群 > 30 天才可使用游客 Bot\n当前入群天数: `{str(days)}`",
+            f"入群 > {MEMBER_AGE_BYPASS_DAYS} 天才可使用游客 Bot\n"
+            f"当前入群天数: `{days}`",
         )
         if notice:
             await delete_messages(cli, chat_id, [notice.id])
