@@ -49,24 +49,22 @@ class RaidGuardManager:
     def _results_key(self, chat_id: int) -> str:
         return f"raid_guard:results:{chat_id}"
 
-    async def record_join(self, chat_id: int, user_id: int) -> None:
-        now = time.time()
-        key = self._joins_key(chat_id)
+    async def _record(self, key: str, member: str, now: float) -> None:
+        """向滑动窗口 zset 写入一条记录并修剪过期成员"""
         async with rc.pipeline() as pipe:
-            pipe.zadd(key, {f"{user_id}:{time.time_ns()}": now})
+            pipe.zadd(key, {member: now})
             pipe.zremrangebyscore(key, "-inf", f"({now - WINDOW_SECONDS}")
             pipe.expire(key, WINDOW_SECONDS * 2)
             await pipe.execute()
 
+    async def record_join(self, chat_id: int, user_id: int) -> None:
+        await self._record(
+            self._joins_key(chat_id), f"{user_id}:{time.time_ns()}", time.time()
+        )
+
     async def record_result(self, chat_id: int, rid: str, passed: bool) -> None:
-        now = time.time()
-        key = self._results_key(chat_id)
         outcome = "pass" if passed else "fail"
-        async with rc.pipeline() as pipe:
-            pipe.zadd(key, {f"{rid}:{outcome}": now})
-            pipe.zremrangebyscore(key, "-inf", f"({now - WINDOW_SECONDS}")
-            pipe.expire(key, WINDOW_SECONDS * 2)
-            await pipe.execute()
+        await self._record(self._results_key(chat_id), f"{rid}:{outcome}", time.time())
 
     async def stats(self, chat_id: int) -> RaidStats:
         now = time.time()
@@ -77,13 +75,11 @@ class RaidGuardManager:
             pipe.zrangebyscore(results_key, now - WINDOW_SECONDS, "+inf")
             counts = await pipe.execute()
         result_members = cast(list[str], counts[2])
-        passed = len([member for member in result_members if member.endswith(":pass")])
-        results = len(result_members)
         return RaidStats(
             joins=int(counts[0]),
             burst_joins=int(counts[1]),
-            results=results,
-            passed=passed,
+            results=len(result_members),
+            passed=sum(m.endswith(":pass") for m in result_members),
         )
 
     async def get_mode(self, chat_id: int) -> RaidMode | None:

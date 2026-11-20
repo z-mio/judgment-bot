@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import hashlib
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime
 
 from pyrogram import Client
@@ -171,6 +171,54 @@ def build_start_link(cli: Client, value: object) -> str:
         raise ValueError("没有 username")
     payload = base64.urlsafe_b64encode(str(value).encode()).decode().rstrip("=")
     return f"https://t.me/{username}?start={payload}"
+
+
+def as_text(data: str | bytes | None) -> str:
+    """callback.data 等可能是 bytes 的值统一转 str"""
+    return data.decode() if isinstance(data, bytes) else (data or "")
+
+
+def schedule_delayed(
+    tasks: dict[str, asyncio.Task[None]],
+    key: str,
+    delay: float,
+    factory: Callable[[], Awaitable[None]],
+    label: str,
+) -> None:
+    """延迟执行任务: 同 key 的旧任务取消, 完成后自动移除登记"""
+    if old := tasks.get(key):
+        old.cancel()
+
+    async def runner() -> None:
+        try:
+            await asyncio.sleep(max(0, delay))
+            await factory()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(f"{label}执行失败: task={key}")
+
+    task = asyncio.create_task(runner())
+    tasks[key] = task
+    task.add_done_callback(
+        lambda t: tasks.pop(key, None) if tasks.get(key) is t else None
+    )
+
+
+def cancel_task(
+    tasks: dict[str, asyncio.Task[None]], key: str, skip_current: bool = False
+) -> None:
+    task = tasks.pop(key, None)
+    if task and not (skip_current and task is asyncio.current_task()):
+        task.cancel()
+
+
+async def cancel_all_tasks(tasks: dict[str, asyncio.Task[None]]) -> None:
+    pending = list(tasks.values())
+    tasks.clear()
+    for task in pending:
+        task.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
 
 
 async def _delete_filtered_messages(

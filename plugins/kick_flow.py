@@ -83,9 +83,6 @@ def parse_member_kick_data(data: str) -> MemberKickConfirmData:
         target_user_id=int(parts["t"]),
     )
 
-    (get_md_chat_link,)
-    (joined_days,)
-
 
 def get_kick_cooldown_seconds(action_days: int) -> int:
     """按发起人入群天数取冷却时长: 入群越久, 冷却越短"""

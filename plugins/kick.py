@@ -3,6 +3,7 @@ from pyrogram.types import CallbackQuery, Message
 
 from log import logger
 from plugins.helpers import (
+    as_text,
     is_user_or_anonymous_admin,
     member_is_admin,
     reply_and_delete,
@@ -99,10 +100,8 @@ async def member_kick_callback(cli: Client, cq: CallbackQuery) -> None:
         return
 
     chat_id = message.chat.id
-    data_text = cq.data.decode() if isinstance(cq.data, bytes) else cq.data
-
     try:
-        data = parse_member_kick_data(data_text)
+        data = parse_member_kick_data(as_text(cq.data))
     except Exception:
         await cq.answer("操作已失效", show_alert=True)
         return

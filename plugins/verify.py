@@ -4,6 +4,7 @@ import random
 import re
 import secrets
 import time
+from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
@@ -27,13 +28,17 @@ from pyrogram.types import (
 from log import logger
 from plugins.filters import new_members, start_filter
 from plugins.helpers import (
+    as_text,
     build_start_link,
+    cancel_all_tasks,
+    cancel_task,
     decode_start_payload,
+    delete_member_messages,
     full_chat_permissions,
     get_chat_link,
     get_hash,
     get_md_chat_link,
-    delete_member_messages,
+    schedule_delayed,
 )
 from services.redis_client import rc
 from services.raid_guard_manager import raid_guard_manager
@@ -57,7 +62,7 @@ STATE_TIMEOUT: FinalState = "timeout"
 
 TaskName = Literal["refresh", "timeout"]
 VERIFY_TASKS: dict[str, asyncio.Task[None]] = {}
-SESSION_LOCKS: dict[str, asyncio.Lock] = {}
+SESSION_LOCKS: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 @dataclass(slots=True)
@@ -209,57 +214,26 @@ def task_key(session: VerifySession, name: TaskName) -> str:
     return f"{session.validator_id}:{session.rid}:{name}"
 
 
-def session_lock(validator_id: str) -> asyncio.Lock:
-    lock = SESSION_LOCKS.get(validator_id)
-    if lock is None:
-        lock = asyncio.Lock()
-        SESSION_LOCKS[validator_id] = lock
-    return lock
-
-
 def schedule_verify_task(
     session: VerifySession,
     name: TaskName,
     delay: int,
     task_factory: Callable[[], Awaitable[None]],
 ) -> None:
-    key = task_key(session, name)
-    if old_task := VERIFY_TASKS.get(key):
-        old_task.cancel()
-
-    async def runner() -> None:
-        try:
-            await asyncio.sleep(delay)
-            await task_factory()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception(f"验证任务执行失败: task={key}")
-
-    task = asyncio.create_task(runner())
-    VERIFY_TASKS[key] = task
-
-    def cleanup(done_task: asyncio.Task[None]) -> None:
-        if VERIFY_TASKS.get(key) is done_task:
-            VERIFY_TASKS.pop(key, None)
-
-    task.add_done_callback(cleanup)
+    schedule_delayed(
+        VERIFY_TASKS, task_key(session, name), delay, task_factory, "验证任务"
+    )
 
 
 def cancel_verify_tasks(session: VerifySession) -> None:
     for name in cast(tuple[TaskName, TaskName], ("refresh", "timeout")):
-        if task := VERIFY_TASKS.pop(task_key(session, name), None):
-            task.cancel()
+        cancel_task(VERIFY_TASKS, task_key(session, name))
 
 
 async def cancel_all_verify_tasks() -> None:
-    tasks = list(VERIFY_TASKS.values())
-    VERIFY_TASKS.clear()
-    if tasks:
-        logger.info(f"正在取消 {len(tasks)} 个进行中的验证任务")
-    for task in tasks:
-        task.cancel()
-    await asyncio.gather(*tasks, return_exceptions=True)
+    if VERIFY_TASKS:
+        logger.info(f"正在取消 {len(VERIFY_TASKS)} 个进行中的验证任务")
+    await cancel_all_tasks(VERIFY_TASKS)
 
 
 def verify_chat_key(chat_id: int) -> str:
@@ -286,7 +260,7 @@ async def update_waiting_session(
     session: VerifySession,
     apply: Callable[[VerifySession], None],
 ) -> bool:
-    async with session_lock(session.validator_id):
+    async with SESSION_LOCKS[session.validator_id]:
         current = await load_session(session.validator_id)
         if not current:
             return False
@@ -313,7 +287,7 @@ async def set_timeout_at(session: VerifySession, timeout_at: int) -> bool:
 
 
 async def delete_session_if_current(session: VerifySession) -> None:
-    async with session_lock(session.validator_id):
+    async with SESSION_LOCKS[session.validator_id]:
         current = await load_session(session.validator_id)
         if current and current.rid == session.rid:
             async with rc.pipeline() as pipe:
@@ -432,11 +406,8 @@ def final_state_from_value(value: str) -> FinalState | None:
 def decode_callback_data(callback: CallbackQuery) -> CQData | None:
     if not callback.data:
         return None
-    data_text = (
-        callback.data.decode() if isinstance(callback.data, bytes) else callback.data
-    )
     try:
-        return CQData.parse(data_text)
+        return CQData.parse(as_text(callback.data))
     except Exception:
         return None
 
@@ -828,16 +799,20 @@ async def verify_end(session: VerifySession) -> None:
     )
 
 
+async def take_pending_session(data: CQData | StartData) -> VerifySession | None:
+    """取出待验证会话并标记最终状态, 无效或已结束返回 None"""
+    session = await load_current_session(data.validator_id, data.rid)
+    final_state = final_state_from_value(data.value)
+    if not session or not final_state or not await finish_session(session, final_state):
+        return None
+    return session
+
+
 async def progress_callback(
     client: Client, callback: CallbackQuery, data: CQData
 ) -> None:
-    session = await load_current_session(data.validator_id, data.rid)
-    final_state = final_state_from_value(data.value)
-    if not session or not final_state:
-        await callback.answer("验证已过期", show_alert=True)
-        return
-
-    if not await finish_session(session, final_state):
+    session = await take_pending_session(data)
+    if not session:
         await callback.answer("验证已过期", show_alert=True)
         return
 
@@ -856,13 +831,8 @@ async def progress_callback(
 
 
 async def progress_start(client: Client, message: Message, data: StartData) -> None:
-    session = await load_current_session(data.validator_id, data.rid)
-    final_state = final_state_from_value(data.value)
-    if not session or not final_state:
-        await message.reply("验证已过期")
-        return
-
-    if not await finish_session(session, final_state):
+    session = await take_pending_session(data)
+    if not session:
         await message.reply("验证已过期")
         return
 
@@ -922,17 +892,13 @@ async def verify_callback(client: Client, callback: CallbackQuery) -> None:
         await callback.answer("验证已过期", show_alert=True)
         return
 
-    if not isinstance(callback.message, Message) or not callback.message.chat:
-        await callback.answer("验证已过期", show_alert=True)
-        return
-    if callback.message.chat.id is None:
+    chat = callback.message.chat if isinstance(callback.message, Message) else None
+    if not chat or chat.id is None:
         await callback.answer("验证已过期", show_alert=True)
         return
 
     try:
-        click_user = await client.get_chat_member(
-            callback.message.chat.id, callback.from_user.id
-        )
+        click_user = await client.get_chat_member(chat.id, callback.from_user.id)
     except Exception:
         await callback.answer("验证已过期", show_alert=True)
         return
