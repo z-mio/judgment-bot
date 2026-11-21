@@ -317,6 +317,13 @@ async def verify_timeout(client: Client, session: CommentSession) -> None:
     current = await pop_session(session)
     if not current:
         return
+    if await comment_guard_manager.is_trusted(current.chat_id, current.user_id):
+        logger.info(
+            f"评论者已受信任, 跳过评论验证: user_id={current.user_id} | "
+            f"chat_id={current.chat_id}"
+        )
+        await delete_prompt(client, current)
+        return
     try:
         joined = not await is_non_member(client, current.chat_id, current.user_id)
     except Exception:
@@ -347,7 +354,7 @@ async def comment_verify(client: Client, msg: Message) -> None:
     chat_id = msg.chat.id
 
     if await comment_guard_manager.is_trusted(chat_id, user.id):
-        await comment_guard_manager.refresh_verified(chat_id, user.id)
+        await comment_guard_manager.refresh_verified(user.id)
         return
 
     sid = session_id(chat_id, user.id)
