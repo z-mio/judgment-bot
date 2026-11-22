@@ -81,50 +81,41 @@ async def unban(cli: Client, msg: Message) -> None:
             f"chat_id={chat_id} | 操作人={operator}"
         )
 
-        if unban_user.type != ChatType.PRIVATE:
-            await reply_and_delete(
-                cli,
-                msg,
-                chat_id,
-                f"已放出 {get_md_chat_link(unban_user)}",
-                link_preview_options=LinkPreviewOptions(is_disabled=True),
-            )
-            return
-
-        try:
-            await cli.restrict_chat_member(
-                chat_id,
-                target_id,
-                permissions=full_chat_permissions(),
-            )
-        except Exception:
-            logger.exception(
-                f"恢复用户权限失败: user_id={target_id} | chat_id={chat_id}"
-            )
-
-        try:
-            # 匿名管理员时 msg.from_user 为 None, 但 msg.sender_chat 存在
-            action_user = msg.from_user or msg.sender_chat
-            assert action_user is not None
-            await cli.send_message(
-                target_id,
-                f"{get_md_chat_link(action_user)} 已在 {get_md_chat_link(msg.chat)} 中将你解除封禁",
-                reply_markup=Ikm(
-                    [
-                        [
-                            Ikb(
-                                text="点击重新加入群组",
-                                url=u,
-                            )
-                        ]
-                    ]
+        if unban_user.type == ChatType.PRIVATE:
+            try:
+                await cli.restrict_chat_member(
+                    chat_id,
+                    target_id,
+                    permissions=full_chat_permissions(),
                 )
-                if (u := get_chat_link(msg.chat))
-                else None,
-                link_preview_options=LinkPreviewOptions(is_disabled=True),
-            )
-        except Exception as e:
-            logger.warning(f"通知用户 [解除封禁] 失败: user_id={target_id} | {e}")
+            except Exception:
+                logger.exception(
+                    f"恢复用户权限失败: user_id={target_id} | chat_id={chat_id}"
+                )
+
+            try:
+                # 匿名管理员时 msg.from_user 为 None, 但 msg.sender_chat 存在
+                action_user = msg.from_user or msg.sender_chat
+                assert action_user is not None
+                await cli.send_message(
+                    target_id,
+                    f"{get_md_chat_link(action_user)} 已在 {get_md_chat_link(msg.chat)} 中将你解除封禁",
+                    reply_markup=Ikm(
+                        [
+                            [
+                                Ikb(
+                                    text="点击重新加入群组",
+                                    url=u,
+                                )
+                            ]
+                        ]
+                    )
+                    if (u := get_chat_link(msg.chat))
+                    else None,
+                    link_preview_options=LinkPreviewOptions(is_disabled=True),
+                )
+            except Exception as e:
+                logger.warning(f"通知用户 [解除封禁] 失败: user_id={target_id} | {e}")
 
     except Exception:
         logger.exception(f"解封失败: target={unban_id} | chat_id={chat_id}")
