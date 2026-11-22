@@ -14,6 +14,7 @@ from plugins.helpers import (
     get_md_chat_link,
     is_user_or_anonymous_admin,
     member_is_admin,
+    reply_and_delete,
 )
 from plugins.verify import clear_verify_failed
 
@@ -38,14 +39,16 @@ async def unban(cli: Client, msg: Message) -> None:
         logger.warning(
             f"解封被拒: 权限不足 | user_id={msg.from_user.id} | chat_id={chat_id}"
         )
-        await msg.reply("权限不足")
+        await reply_and_delete(cli, msg, chat_id, "权限不足")
         return
 
     if not msg.command or not msg.command[1:]:
         logger.debug(
             f"忽略解封: 缺少用户名或 id | user_id={operator} | chat_id={chat_id}"
         )
-        await msg.reply("请加上用户名或id\n例: `/unban @username`")
+        await reply_and_delete(
+            cli, msg, chat_id, "请加上用户名或id\n例: `/unban @username`"
+        )
         return
 
     unban_id = msg.command[1]
@@ -56,7 +59,10 @@ async def unban(cli: Client, msg: Message) -> None:
         )
     except Exception:
         logger.exception(f"获取解封目标信息失败: target={unban_id} | chat_id={chat_id}")
-        await msg.reply(
+        await reply_and_delete(
+            cli,
+            msg,
+            chat_id,
             f"获取 `{unban_id}` 信息失败",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
@@ -76,6 +82,13 @@ async def unban(cli: Client, msg: Message) -> None:
         )
 
         if unban_user.type != ChatType.PRIVATE:
+            await reply_and_delete(
+                cli,
+                msg,
+                chat_id,
+                f"已放出 {get_md_chat_link(unban_user)}",
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
+            )
             return
 
         try:
@@ -115,13 +128,19 @@ async def unban(cli: Client, msg: Message) -> None:
 
     except Exception:
         logger.exception(f"解封失败: target={unban_id} | chat_id={chat_id}")
-        await msg.reply(
+        await reply_and_delete(
+            cli,
+            msg,
+            chat_id,
             f"放出 {get_md_chat_link(unban_user)} 失败",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
     else:
-        await msg.reply(
+        await reply_and_delete(
+            cli,
+            msg,
+            chat_id,
             f"已放出 {get_md_chat_link(unban_user)}",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )

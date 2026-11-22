@@ -152,8 +152,14 @@ async def delete_messages(
         logger.exception(f"删除消息流程失败: chat_id={chat_id} | ids={message_ids}")
 
 
-async def reply_and_delete(cli: Client, msg: Message, chat_id: int, text: str) -> None:
-    reply = await msg.reply(text)
+async def reply_and_delete(
+    cli: Client,
+    msg: Message,
+    chat_id: int,
+    text: str,
+    link_preview_options: LinkPreviewOptions | None = None,
+) -> None:
+    reply = await msg.reply(text, link_preview_options=link_preview_options)
     message_ids = [msg.id]
     if reply:
         message_ids.append(reply.id)
