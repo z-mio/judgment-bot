@@ -340,6 +340,8 @@ async def member_kick(
         return
 
     chat_id = msg.chat.id
+    if command_message:
+        await delete_messages(cli, chat_id, [command_message.id], delay=0)
     if await member_is_admin(cli, chat_id, target_user_id):
         logger.info(
             f"击落被拒: 目标是管理员 | user_id={action_user_id} | "
