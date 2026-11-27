@@ -396,9 +396,18 @@ async def verify_timeout(client: Client, session: CommentSession) -> None:
     await verify_failed(client, current, "超时")
 
 
-async def verify_passed(client: Client, session: CommentSession) -> None:
+async def verify_passed(
+    client: Client, session: CommentSession, operator_id: int | None = None
+) -> None:
     await comment_guard_manager.mark_verified(session.chat_id, session.user_id)
-    logger.info(f"评论验证通过: user_id={session.user_id} | chat_id={session.chat_id}")
+    assisted = (
+        f" | assisted_by={operator_id}"
+        if operator_id is not None and operator_id != session.user_id
+        else ""
+    )
+    logger.info(
+        f"评论验证通过: user_id={session.user_id} | chat_id={session.chat_id}{assisted}"
+    )
     await end_prompt(client, session, "验证通过")
 
 
@@ -497,4 +506,4 @@ async def comment_verify_callback(client: Client, callback: CallbackQuery) -> No
             await callback.answer("已代对方完成验证")
     except Exception as e:
         logger.warning(f"发送评论验证回执失败: sid={current.sid} | {e}")
-    await verify_passed(client, current)
+    await verify_passed(client, current, operator_id=callback.from_user.id)
