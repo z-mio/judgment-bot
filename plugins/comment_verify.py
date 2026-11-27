@@ -485,8 +485,11 @@ async def comment_verify_callback(client: Client, callback: CallbackQuery) -> No
         await callback.answer("验证已过期", show_alert=True)
         return
 
-    if is_self:
-        await callback.answer("验证通过, 现在可以正常评论了")
-    else:
-        await callback.answer("已代对方完成验证")
+    try:
+        if is_self:
+            await callback.answer("验证通过, 现在可以正常评论了")
+        else:
+            await callback.answer("已代对方完成验证")
+    except Exception as e:
+        logger.warning(f"发送评论验证回执失败: sid={current.sid} | {e}")
     await verify_passed(client, current)
