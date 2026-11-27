@@ -50,8 +50,6 @@ INVITE_TTL_SECONDS = 86400 * 7
 
 TASKS: dict[str, asyncio.Task[None]] = {}
 LOCKS: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-LINKED_CHANNEL_IDS: dict[int, int] = {}
-LINKED_CHANNEL_LOCK = asyncio.Lock()
 
 
 @dataclass(slots=True)
@@ -60,21 +58,17 @@ class CommentSession:
     user_id: int
     rid: str
     timeout_at: int
-    channel_id: int | None = None
     msg_ids: list[int] = field(default_factory=list)
     prompt_id: int | None = None
 
     @classmethod
-    def create(
-        cls, chat_id: int, user_id: int, msg_id: int, channel_id: int | None = None
-    ) -> Self:
+    def create(cls, chat_id: int, user_id: int, msg_id: int) -> Self:
         now = int(time.time())
         return cls(
             chat_id=chat_id,
             user_id=user_id,
             rid=secrets.token_urlsafe(8),
             timeout_at=now + VERIFY_SECONDS,
-            channel_id=channel_id,
             msg_ids=[msg_id],
         )
 
@@ -201,25 +195,15 @@ def known_linked_channel_id(chat: Chat | None) -> int | None:
 async def get_linked_channel_id(
     client: Client, chat_id: int, chat: Chat | None = None
 ) -> int | None:
-    """获取讨论群关联的频道 ID; 只在进程内缓存正向结果"""
+    """获取讨论群当前关联的频道 ID"""
     if channel_id := known_linked_channel_id(chat):
-        LINKED_CHANNEL_IDS[chat_id] = channel_id
         return channel_id
-    if channel_id := LINKED_CHANNEL_IDS.get(chat_id):
-        return channel_id
-
-    async with LINKED_CHANNEL_LOCK:
-        if channel_id := LINKED_CHANNEL_IDS.get(chat_id):
-            return channel_id
-        try:
-            full_chat = await client.get_chat(chat_id)
-        except Exception as e:
-            logger.warning(f"获取讨论群关联频道失败: chat_id={chat_id} | {e}")
-            return None
-        channel_id = known_linked_channel_id(full_chat)
-        if channel_id:
-            LINKED_CHANNEL_IDS[chat_id] = channel_id
-        return channel_id
+    try:
+        full_chat = await client.get_chat(chat_id)
+    except Exception as e:
+        logger.warning(f"获取讨论群关联频道失败: chat_id={chat_id} | {e}")
+        return None
+    return known_linked_channel_id(full_chat)
 
 
 async def member_is_group_or_channel_admin(
@@ -241,7 +225,6 @@ async def is_comment_verification_exempt(
     if not await is_non_member(client, chat_id, user_id):
         return True
     if channel_id and await member_is_admin(client, channel_id, user_id):
-        await comment_guard_manager.mark_member(chat_id, user_id)
         return True
     return False
 
@@ -394,9 +377,7 @@ async def verify_timeout(client: Client, session: CommentSession) -> None:
         )
         await delete_prompt(client, current)
         return
-    channel_id = current.channel_id or await get_linked_channel_id(
-        client, current.chat_id
-    )
+    channel_id = await get_linked_channel_id(client, current.chat_id)
     try:
         exempt = await is_comment_verification_exempt(
             client, current.chat_id, current.user_id, channel_id
@@ -451,7 +432,7 @@ async def comment_verify(client: Client, msg: Message) -> None:
             )
             return
 
-        session = CommentSession.create(chat_id, user.id, msg.id, channel_id)
+        session = CommentSession.create(chat_id, user.id, msg.id)
         try:
             await send_prompt(client, msg, session)
         except Exception:
@@ -489,9 +470,7 @@ async def comment_verify_callback(client: Client, callback: CallbackQuery) -> No
             expired = True
         else:
             is_self = callback.from_user.id == session.user_id
-            channel_id = session.channel_id or await get_linked_channel_id(
-                client, session.chat_id
-            )
+            channel_id = await get_linked_channel_id(client, session.chat_id)
             if not is_self and not await member_is_group_or_channel_admin(
                 client, session.chat_id, callback.from_user.id, channel_id
             ):
