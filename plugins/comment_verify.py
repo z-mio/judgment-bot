@@ -74,7 +74,9 @@ class CommentSession:
 
     @classmethod
     def loads(cls, raw: str) -> Self:
-        return cls(**cast(dict[str, Any], json.loads(raw)))
+        data = cast(dict[str, Any], json.loads(raw))
+        data.pop("channel_id", None)
+        return cls(**data)
 
     def dumps(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
