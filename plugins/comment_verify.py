@@ -31,6 +31,7 @@ from plugins.helpers import (
     get_chat_link,
     get_hash,
     get_md_chat_link,
+    member_is_admin,
     schedule_delayed,
 )
 from services.comment_guard_manager import comment_guard_manager
@@ -73,7 +74,9 @@ class CommentSession:
 
     @classmethod
     def loads(cls, raw: str) -> Self:
-        return cls(**cast(dict[str, Any], json.loads(raw)))
+        data = cast(dict[str, Any], json.loads(raw))
+        data.pop("channel_id", None)
+        return cls(**data)
 
     def dumps(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
@@ -106,15 +109,20 @@ async def load_session(sid: str) -> CommentSession | None:
         return None
 
 
+async def pop_session_locked(session: CommentSession) -> CommentSession | None:
+    """结束会话; 调用方必须持有会话锁"""
+    current = await load_session(session.sid)
+    if not current or current.rid != session.rid:
+        return None
+    await rc.delete(session_key(session.sid))
+    cancel_tasks(current)
+    return current
+
+
 async def pop_session(session: CommentSession) -> CommentSession | None:
     """结束会话, 只有当前会话的第一个结束者能拿到最新数据"""
     async with LOCKS[session.sid]:
-        current = await load_session(session.sid)
-        if not current or current.rid != session.rid:
-            return None
-        await rc.delete(session_key(session.sid))
-    cancel_tasks(current)
-    return current
+        return await pop_session_locked(session)
 
 
 def task_key(session: CommentSession) -> str:
@@ -173,6 +181,58 @@ async def is_non_member(client: Client, chat_id: int, user_id: int) -> bool:
         return True
     if member.status == ChatMemberStatus.RESTRICTED:
         return member.is_member is False
+    return False
+
+
+def known_linked_channel_id(chat: Chat | None) -> int | None:
+    if not chat:
+        return None
+    if chat.linked_chat_id:
+        return chat.linked_chat_id
+    if chat.linked_chat and chat.linked_chat.id:
+        return chat.linked_chat.id
+    return None
+
+
+async def get_linked_channel_id(
+    client: Client, chat_id: int, chat: Chat | None = None
+) -> int | None:
+    """获取讨论群当前关联的频道 ID"""
+    if channel_id := known_linked_channel_id(chat):
+        return channel_id
+    try:
+        full_chat = await client.get_chat(chat_id)
+    except Exception as e:
+        logger.warning(f"获取讨论群关联频道失败: chat_id={chat_id} | {e}")
+        return None
+    return known_linked_channel_id(full_chat)
+
+
+async def member_is_group_or_channel_admin(
+    client: Client, chat_id: int, user_id: int, channel_id: int | None
+) -> bool:
+    chat_ids = [chat_id]
+    if channel_id and channel_id != chat_id:
+        chat_ids.append(channel_id)
+    results = await asyncio.gather(
+        *(member_is_admin(client, item, user_id) for item in chat_ids)
+    )
+    return any(results)
+
+
+async def is_comment_verification_exempt(
+    client: Client, chat_id: int, user_id: int, chat: Chat | None = None
+) -> bool:
+    """群成员免验证; 频道管理员即使未入群也免验证"""
+    if not await is_non_member(client, chat_id, user_id):
+        return True
+    channel_id = await get_linked_channel_id(client, chat_id, chat)
+    if channel_id and await member_is_admin(client, channel_id, user_id):
+        try:
+            await comment_guard_manager.mark_channel_admin(chat_id, user_id)
+        except Exception as e:
+            logger.warning(f"缓存频道管理员免验证状态失败: chat_id={chat_id} | {e}")
+        return True
     return False
 
 
@@ -325,12 +385,14 @@ async def verify_timeout(client: Client, session: CommentSession) -> None:
         await delete_prompt(client, current)
         return
     try:
-        joined = not await is_non_member(client, current.chat_id, current.user_id)
+        exempt = await is_comment_verification_exempt(
+            client, current.chat_id, current.user_id
+        )
     except Exception:
-        joined = False
-    if joined:
+        exempt = False
+    if exempt:
         logger.info(
-            f"评论者已入群, 跳过评论验证: user_id={current.user_id} | "
+            f"评论者已入群或为频道管理员, 跳过评论验证: user_id={current.user_id} | "
             f"chat_id={current.chat_id}"
         )
         await delete_prompt(client, current)
@@ -338,9 +400,18 @@ async def verify_timeout(client: Client, session: CommentSession) -> None:
     await verify_failed(client, current, "超时")
 
 
-async def verify_passed(client: Client, session: CommentSession) -> None:
+async def verify_passed(
+    client: Client, session: CommentSession, operator_id: int | None = None
+) -> None:
     await comment_guard_manager.mark_verified(session.chat_id, session.user_id)
-    logger.info(f"评论验证通过: user_id={session.user_id} | chat_id={session.chat_id}")
+    assisted = (
+        f" | assisted_by={operator_id}"
+        if operator_id is not None and operator_id != session.user_id
+        else ""
+    )
+    logger.info(
+        f"评论验证通过: user_id={session.user_id} | chat_id={session.chat_id}{assisted}"
+    )
     await end_prompt(client, session, "验证通过")
 
 
@@ -365,11 +436,11 @@ async def comment_verify(client: Client, msg: Message) -> None:
             return
 
         try:
-            if not await is_non_member(client, chat_id, user.id):
+            if await is_comment_verification_exempt(client, chat_id, user.id, msg.chat):
                 return
         except Exception:
             logger.exception(
-                f"获取评论者成员状态失败: user_id={user.id} | chat_id={chat_id}"
+                f"获取评论者免验证状态失败: user_id={user.id} | chat_id={chat_id}"
             )
             return
 
@@ -400,14 +471,43 @@ async def comment_verify_callback(client: Client, callback: CallbackQuery) -> No
     if not session or session.rid != parts[1]:
         await callback.answer("验证已过期", show_alert=True)
         return
-    if callback.from_user.id != session.user_id:
+
+    current = None
+    denied = False
+    expired = False
+    is_self = False
+    async with LOCKS[session.sid]:
+        session = await load_session(parts[0])
+        if not session or session.rid != parts[1]:
+            expired = True
+        else:
+            is_self = callback.from_user.id == session.user_id
+            if is_self:
+                current = await pop_session_locked(session)
+            else:
+                channel_id = await get_linked_channel_id(client, session.chat_id)
+                if await member_is_group_or_channel_admin(
+                    client, session.chat_id, callback.from_user.id, channel_id
+                ):
+                    current = await pop_session_locked(session)
+                else:
+                    denied = True
+
+    if expired:
+        await callback.answer("验证已过期", show_alert=True)
+        return
+    if denied:
         await callback.answer("这不是你的验证", show_alert=True)
         return
-
-    current = await pop_session(session)
     if not current:
         await callback.answer("验证已过期", show_alert=True)
         return
 
-    await callback.answer("验证通过, 现在可以正常评论了")
-    await verify_passed(client, current)
+    try:
+        if is_self:
+            await callback.answer("验证通过, 现在可以正常评论了")
+        else:
+            await callback.answer("已代对方完成验证")
+    except Exception as e:
+        logger.warning(f"发送评论验证回执失败: sid={current.sid} | {e}")
+    await verify_passed(client, current, operator_id=callback.from_user.id)

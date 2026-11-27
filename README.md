@@ -71,7 +71,7 @@
 
 **1. 创建 Bot**: 通过 [@BotFather](https://t.me/BotFather) 创建 Bot, 拿到 `BOT_TOKEN`; 在 [my.telegram.org](https://my.telegram.org) 获取 `API_ID` 和 `API_HASH`
 
-**2. 拉进群并授权**: 把 Bot 设为管理员, 至少给 **封禁用户** 和 **删除消息** 两项权限
+**2. 拉进群并授权**: 把 Bot 设为群管理员, 至少给 **封禁用户** 和 **删除消息** 两项权限; 需要识别频道管理员时, 还要把 Bot 设为关联频道管理员
 
 **3. 配置并启动**
 

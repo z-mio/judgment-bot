@@ -74,7 +74,7 @@
 
 **1. Create a bot**: create one with [@BotFather](https://t.me/BotFather) to get `BOT_TOKEN`, and get `API_ID` / `API_HASH` from [my.telegram.org](https://my.telegram.org)
 
-**2. Add it to your group**: make the bot an admin with at least the **Ban users** and **Delete messages** permissions
+**2. Add it to your group**: make the bot a group admin with at least the **Ban users** and **Delete messages** permissions; to recognize channel admins, also make it an admin of the linked channel
 
 **3. Configure and start**
 

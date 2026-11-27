@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pyrogram import Client
 from pyrogram.enums import ChatMemberStatus, ChatMembersFilter
+from pyrogram.errors import UserNotParticipant
 from pyrogram.types import (
     Chat,
     ChatPermissions,
@@ -82,6 +83,8 @@ def is_user_or_anonymous_admin(msg: Message) -> bool:
 async def member_is_admin(cli: Client, chat_id: int, user_id: int) -> bool:
     try:
         member = await cli.get_chat_member(chat_id, user_id)
+    except UserNotParticipant:
+        return False
     except Exception:
         logger.exception(f"获取成员权限失败: chat_id={chat_id} | user_id={user_id}")
         return False
