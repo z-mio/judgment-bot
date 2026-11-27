@@ -219,11 +219,12 @@ async def member_is_group_or_channel_admin(
 
 
 async def is_comment_verification_exempt(
-    client: Client, chat_id: int, user_id: int, channel_id: int | None
+    client: Client, chat_id: int, user_id: int, chat: Chat | None = None
 ) -> bool:
     """群成员免验证; 频道管理员即使未入群也免验证"""
     if not await is_non_member(client, chat_id, user_id):
         return True
+    channel_id = await get_linked_channel_id(client, chat_id, chat)
     if channel_id and await member_is_admin(client, channel_id, user_id):
         return True
     return False
@@ -377,10 +378,9 @@ async def verify_timeout(client: Client, session: CommentSession) -> None:
         )
         await delete_prompt(client, current)
         return
-    channel_id = await get_linked_channel_id(client, current.chat_id)
     try:
         exempt = await is_comment_verification_exempt(
-            client, current.chat_id, current.user_id, channel_id
+            client, current.chat_id, current.user_id
         )
     except Exception:
         exempt = False
@@ -420,11 +420,8 @@ async def comment_verify(client: Client, msg: Message) -> None:
             await save_session(session)
             return
 
-        channel_id = await get_linked_channel_id(client, chat_id, msg.chat)
         try:
-            if await is_comment_verification_exempt(
-                client, chat_id, user.id, channel_id
-            ):
+            if await is_comment_verification_exempt(client, chat_id, user.id, msg.chat):
                 return
         except Exception:
             logger.exception(
