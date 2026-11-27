@@ -24,7 +24,7 @@ class CommentGuardManager:
         return f"comment_fail:{chat_id}_{user_id}"
 
     async def is_trusted(self, chat_id: int, user_id: int) -> bool:
-        """本群成员或已在任意评论区通过验证的用户免验证"""
+        """本群成员/频道管理员或已在任意评论区通过验证的用户免验证"""
         async with rc.pipeline() as pipe:
             pipe.exists(self._member_key(chat_id, user_id))
             pipe.exists(self._verified_key(user_id))
@@ -35,6 +35,14 @@ class CommentGuardManager:
         """群成员已通过入群验证, 短期缓存避免每条消息都查成员状态"""
         await rc.set(
             self._member_key(chat_id, user_id), "member", ex=self.member_ttl_seconds
+        )
+
+    async def mark_channel_admin(self, chat_id: int, user_id: int) -> None:
+        """频道管理员在本群短期免验证; 与群成员使用同一个一致性窗口"""
+        await rc.set(
+            self._member_key(chat_id, user_id),
+            "channel_admin",
+            ex=self.member_ttl_seconds,
         )
 
     async def mark_verified(self, chat_id: int, user_id: int) -> None:

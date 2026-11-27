@@ -228,6 +228,7 @@ async def is_comment_verification_exempt(
         return True
     channel_id = await get_linked_channel_id(client, chat_id, chat)
     if channel_id and await member_is_admin(client, channel_id, user_id):
+        await comment_guard_manager.mark_channel_admin(chat_id, user_id)
         return True
     return False
 
