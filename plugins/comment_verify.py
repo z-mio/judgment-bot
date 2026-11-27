@@ -469,13 +469,16 @@ async def comment_verify_callback(client: Client, callback: CallbackQuery) -> No
             expired = True
         else:
             is_self = callback.from_user.id == session.user_id
-            channel_id = await get_linked_channel_id(client, session.chat_id)
-            if not is_self and not await member_is_group_or_channel_admin(
-                client, session.chat_id, callback.from_user.id, channel_id
-            ):
-                denied = True
-            else:
+            if is_self:
                 current = await pop_session_locked(session)
+            else:
+                channel_id = await get_linked_channel_id(client, session.chat_id)
+                if await member_is_group_or_channel_admin(
+                    client, session.chat_id, callback.from_user.id, channel_id
+                ):
+                    current = await pop_session_locked(session)
+                else:
+                    denied = True
 
     if expired:
         await callback.answer("验证已过期", show_alert=True)
