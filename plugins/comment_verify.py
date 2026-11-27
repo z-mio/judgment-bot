@@ -31,6 +31,7 @@ from plugins.helpers import (
     get_chat_link,
     get_hash,
     get_md_chat_link,
+    member_is_admin,
     schedule_delayed,
 )
 from services.comment_guard_manager import comment_guard_manager
@@ -400,7 +401,10 @@ async def comment_verify_callback(client: Client, callback: CallbackQuery) -> No
     if not session or session.rid != parts[1]:
         await callback.answer("验证已过期", show_alert=True)
         return
-    if callback.from_user.id != session.user_id:
+    is_self = callback.from_user.id == session.user_id
+    if not is_self and not await member_is_admin(
+        client, session.chat_id, callback.from_user.id
+    ):
         await callback.answer("这不是你的验证", show_alert=True)
         return
 
@@ -409,5 +413,8 @@ async def comment_verify_callback(client: Client, callback: CallbackQuery) -> No
         await callback.answer("验证已过期", show_alert=True)
         return
 
-    await callback.answer("验证通过, 现在可以正常评论了")
+    if is_self:
+        await callback.answer("验证通过, 现在可以正常评论了")
+    else:
+        await callback.answer("已代对方完成验证")
     await verify_passed(client, current)
